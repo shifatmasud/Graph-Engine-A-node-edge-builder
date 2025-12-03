@@ -1,11 +1,14 @@
 import React from 'react';
 import { FlowEditor } from './components/App/FlowEditor';
+import { ThemeProvider } from './components/Core/ThemeContext';
 
-const App: React.FC = () => {
+const App = () => {
   return (
-    <main className="w-full h-full bg-surface-1">
-      <FlowEditor />
-    </main>
+    <ThemeProvider>
+      <main className="w-full h-full">
+        <FlowEditor />
+      </main>
+    </ThemeProvider>
   );
 };
 

@@ -2,38 +2,26 @@ import React, { useRef, useLayoutEffect, useEffect } from 'react';
 import { motion, MotionValue, PanInfo } from 'framer-motion';
 import { Handle } from './Handle';
 import { Side } from '../../types';
+import { useTheme } from './ThemeContext';
 
 interface NodeShellProps {
   id: string;
   x: MotionValue<number>;
   y: MotionValue<number>;
   isSelected: boolean;
-  isConnecting?: boolean; // Is the global state currently in "Connecting" mode?
-  isDraggable?: boolean; // Controls if node can be dragged
-  isPanMode?: boolean; // New: Controls if we are in Pan mode
-  showHandles?: boolean; // Only show handles in "Connector" mode
+  isConnecting?: boolean; 
+  isDraggable?: boolean; 
+  isPanMode?: boolean; 
+  showHandles?: boolean; 
   handles?: Partial<Record<Side, number>>;
   width?: number;
   children?: React.ReactNode;
   
-  // Events
   onDrag: (id: string, x: number, y: number) => void;
   onSelect: (id: string) => void;
   onDimensionsChange?: (id: string, width: number, height: number) => void;
   onHandleClick: (e: React.MouseEvent, nodeId: string, index: number, side: Side) => void;
 }
-
-const theme = {
-  surface: 'rgba(9, 9, 11, 0.95)', // Increased opacity for better contrast
-  border: {
-    idle: 'rgba(39, 39, 42, 1)',   // Zinc 800
-    selected: '#3b82f6',           // Blue 500
-  },
-  glow: {
-    idle: '0 4px 6px -1px rgba(0,0,0,0.5)',
-    selected: '0 20px 50px -10px rgba(59, 130, 246, 0.3), 0 0 0 1px #3b82f6',
-  }
-};
 
 export const NodeShell: React.FC<NodeShellProps> = ({
   id,
@@ -45,7 +33,7 @@ export const NodeShell: React.FC<NodeShellProps> = ({
   isPanMode = false,
   showHandles = false,
   handles = { top: 0, right: 0, bottom: 0, left: 0 },
-  width = 200, // Match default engine width to avoid misalignment
+  width = 200, 
   children,
   onDrag,
   onSelect,
@@ -53,32 +41,23 @@ export const NodeShell: React.FC<NodeShellProps> = ({
   onHandleClick,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  
-  // Ref for callback to prevent observer recreation loop
   const onDimensionsChangeRef = useRef(onDimensionsChange);
+  const { theme } = useTheme();
 
-  // Keep ref up to date
   useEffect(() => {
     onDimensionsChangeRef.current = onDimensionsChange;
   }, [onDimensionsChange]);
 
-  // Report dimensions for edge calculations
   useLayoutEffect(() => {
     if (!containerRef.current) return;
     
     const observer = new ResizeObserver((entries) => {
-      // Wrap in RAF to avoid "ResizeObserver loop limit exceeded" and decouple from React render cycle
       requestAnimationFrame(() => {
           if (!containerRef.current || !onDimensionsChangeRef.current) return;
-
           for (const entry of entries) {
-            // Critical: Use offsetWidth/Height to get the border-box size (including borders)
-            // contentRect only returns content box. If we feed contentRect back into style.width 
-            // (which is border-box), the element will shrink by 2*borderWidth every cycle.
             const target = entry.target as HTMLElement;
             const w = target.offsetWidth;
             const h = target.offsetHeight;
-            
             if (w > 0 && h > 0) {
                 onDimensionsChangeRef.current(id, w, h);
             }
@@ -91,7 +70,6 @@ export const NodeShell: React.FC<NodeShellProps> = ({
   }, [id]);
 
   const handleDragEnd = (_: any, info: PanInfo) => {
-    // Only commit drag if it moved significantly to avoid jitter
     onDrag(id, x.get(), y.get());
   };
 
@@ -119,17 +97,16 @@ export const NodeShell: React.FC<NodeShellProps> = ({
   const styles = {
     shell: {
       position: 'absolute' as const,
-      // Use minWidth to prevent initial collapse before content loads
       minWidth: '150px', 
       width: width || 'auto',
       borderRadius: '12px',
-      background: theme.surface,
+      background: theme.surface[1], // Use theme surface
       backdropFilter: 'blur(12px)',
-      boxShadow: isSelected ? theme.glow.selected : theme.glow.idle,
-      border: `1px solid ${isSelected ? theme.border.selected : theme.border.idle}`,
+      boxShadow: isSelected ? `0 20px 50px -10px ${theme.accent.glow}, 0 0 0 1px ${theme.accent.primary}` : theme.shadow,
+      border: `1px solid ${isSelected ? theme.accent.primary : theme.border}`,
       cursor: isDraggable ? 'grab' : (isPanMode ? 'grab' : 'default'),
       zIndex: isSelected ? 100 : 10,
-      transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
+      transition: 'box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.3s ease',
       display: 'flex',
       flexDirection: 'column' as const,
     },
@@ -152,8 +129,6 @@ export const NodeShell: React.FC<NodeShellProps> = ({
       dragMomentum={false}
       onDragEnd={handleDragEnd}
       onPointerDown={(e) => {
-        // Allow event propagation if we are in Pan Mode so the canvas can catch it.
-        // Also disable selection in Pan mode to avoid accidental selection.
         if (!isPanMode) {
             e.stopPropagation(); 
             onSelect(id);
@@ -164,13 +139,11 @@ export const NodeShell: React.FC<NodeShellProps> = ({
       whileTap={isDraggable ? { cursor: 'grabbing', scale: 1.02 } : {}}
       transition={{ type: 'spring', stiffness: 400, damping: 25 }}
     >
-      {/* Handles */}
       {renderHandleGroup('top', handles.top || 0)}
       {renderHandleGroup('right', handles.right || 0)}
       {renderHandleGroup('bottom', handles.bottom || 0)}
       {renderHandleGroup('left', handles.left || 0)}
 
-      {/* Content Injection */}
       <div style={styles.contentArea}>
         <div style={styles.contentInner}>
           {children}
@@ -180,7 +153,6 @@ export const NodeShell: React.FC<NodeShellProps> = ({
   );
 };
 
-// Helper for positioning handle containers
 const getHandleGroupStyle = (side: Side): React.CSSProperties => {
   const common = {
     position: 'absolute' as const,

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, MotionValue, useTransform } from 'framer-motion';
 import { getBezierPath } from '../../utils/geometry';
 import { Side } from '../../types';
+import { useTheme } from './ThemeContext';
 
 interface EdgeConnectorProps {
   id: string;
@@ -13,23 +14,10 @@ interface EdgeConnectorProps {
   targetSide: Side;
   isSelected?: boolean;
   isConnectMode?: boolean;
-  isPanMode?: boolean; // New prop
+  isPanMode?: boolean;
   onSelect?: (id: string) => void;
   onDelete?: (id: string) => void;
 }
-
-const theme = {
-  stroke: {
-    default: '#52525b', // Zinc 600
-    selected: '#3b82f6', // Blue 500
-    connectHover: '#ef4444', // Red 500
-  },
-  deleteButton: {
-    bg: '#18181b',
-    stroke: '#ef4444',
-    idleStroke: '#a1a1aa'
-  }
-};
 
 export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
   id,
@@ -46,8 +34,8 @@ export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
   onDelete,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const { theme } = useTheme();
 
-  // Combine path calculation and midpoint derivation for sync
   const meta = useTransform(
     [sourceNode.x, sourceNode.y, targetNode.x, targetNode.y],
     ([sx, sy, tx, ty]) => {
@@ -56,8 +44,6 @@ export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
       
       const path = getBezierPath(start, end, sourceSide, targetSide);
 
-      // Midpoint Calc (Cubic Bezier t=0.5)
-      // Recalculating control points locally to derive geometric center
       const curvature = 50;
       let cp1x = start.x, cp1y = start.y;
       let cp2x = end.x, cp2y = end.y;
@@ -76,7 +62,6 @@ export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
         case 'bottom': cp2y = end.y + curvature; break;
       }
 
-      // t=0.5
       const midX = 0.125 * start.x + 0.375 * cp1x + 0.375 * cp2x + 0.125 * end.x;
       const midY = 0.125 * start.y + 0.375 * cp1y + 0.375 * cp2y + 0.125 * end.y;
 
@@ -103,7 +88,7 @@ export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
       }}
       style={{ cursor: isConnectMode ? 'default' : (isPanMode ? 'grab' : 'pointer') }}
     >
-      {/* Hit Area - Expanded for easier interaction */}
+      {/* Hit Area */}
       <motion.path
         d={pathData}
         fill="none"
@@ -117,7 +102,7 @@ export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
         d={pathData}
         fill="none"
         animate={{
-          stroke: isSelected ? 'rgba(59, 130, 246, 0.5)' : (isConnectMode && isHovered ? 'rgba(239, 68, 68, 0.3)' : 'transparent'),
+          stroke: isSelected ? theme.accent.glow : (isConnectMode && isHovered ? 'rgba(239, 68, 68, 0.3)' : 'transparent'),
           strokeWidth: isSelected || (isConnectMode && isHovered) ? 8 : 0,
         }}
         transition={{ duration: 0.2 }}
@@ -128,7 +113,7 @@ export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
       <motion.path
         d={pathData}
         fill="none"
-        stroke="#09090b"
+        stroke={theme.surface[1]}
         strokeWidth={4}
         strokeLinecap="round"
         style={{ opacity: 0.5 }}
@@ -140,17 +125,16 @@ export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
         fill="none"
         initial={false}
         animate={{
-          stroke: isSelected ? theme.stroke.selected : (isConnectMode && isHovered ? theme.stroke.connectHover : theme.stroke.default),
+          stroke: isSelected ? theme.accent.primary : (isConnectMode && isHovered ? theme.accent.danger : theme.content[3]),
         }}
         strokeWidth={2}
         strokeLinecap="round"
       />
 
-      {/* Flow Particle - Hidden in Connect Mode for clarity */}
       {!isConnectMode && (
         <motion.circle
           r="2"
-          fill={isSelected ? theme.stroke.selected : "#a1a1aa"}
+          fill={isSelected ? theme.accent.primary : theme.content[2]}
         >
           <motion.animateMotion
             dur="2s"
@@ -161,7 +145,6 @@ export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
         </motion.circle>
       )}
 
-      {/* Delete Button (Strictly Connect Mode Only) */}
       {isConnectMode && (
         <motion.g
             style={{ x: midX, y: midY, pointerEvents: 'auto' }}
@@ -176,8 +159,8 @@ export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
             whileTap={{ scale: 0.9 }}
             cursor="pointer"
         >
-            <circle r="10" fill={theme.deleteButton.bg} stroke={theme.deleteButton.stroke} strokeWidth="1.5" />
-            <path d="M-3 -3 L3 3 M3 -3 L-3 3" stroke={theme.deleteButton.stroke} strokeWidth="1.5" strokeLinecap="round" />
+            <circle r="10" fill={theme.surface[2]} stroke={theme.accent.danger} strokeWidth="1.5" />
+            <path d="M-3 -3 L3 3 M3 -3 L-3 3" stroke={theme.accent.danger} strokeWidth="1.5" strokeLinecap="round" />
         </motion.g>
       )}
     </g>

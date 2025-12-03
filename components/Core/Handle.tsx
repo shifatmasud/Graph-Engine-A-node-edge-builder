@@ -1,24 +1,15 @@
-
 import React, { useState } from 'react';
 import { Side } from '../../types';
+import { useTheme } from './ThemeContext';
 
 interface HandleProps {
   side: Side;
   index: number;
   nodeId: string;
   isConnected?: boolean;
-  isConnecting?: boolean; // True if we are currently dragging a wire from somewhere else
+  isConnecting?: boolean; 
   onClick?: (e: React.MouseEvent, nodeId: string, index: number, side: Side) => void;
 }
-
-const colors = {
-  bg: '#09090b',         // Surface 1
-  border: '#27272a',     // Surface 3
-  accent: '#3b82f6',     // Blue 500
-  connected: '#fafafa',  // White
-  inactive: '#52525b',   // Content 3
-  validTarget: '#22c55e', // Green for valid drop target
-};
 
 export const Handle: React.FC<HandleProps> = ({
   side,
@@ -29,6 +20,7 @@ export const Handle: React.FC<HandleProps> = ({
   onClick
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const { theme } = useTheme();
 
   const styles = {
     wrapper: {
@@ -36,13 +28,12 @@ export const Handle: React.FC<HandleProps> = ({
       width: '14px',
       height: '14px',
       borderRadius: '50%',
-      // If connecting, show green hint on hover, else standard colors
-      backgroundColor: colors.bg,
+      backgroundColor: theme.surface[1],
       borderWidth: '2px', 
       borderStyle: 'solid',
       borderColor: isHovered && isConnecting 
-        ? colors.validTarget 
-        : (isConnected || isHovered) ? colors.accent : colors.border,
+        ? theme.accent.valid 
+        : (isConnected || isHovered) ? theme.accent.primary : theme.border,
       transition: 'all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
       cursor: isConnecting ? 'copy' : 'crosshair',
       zIndex: 50,
@@ -50,9 +41,8 @@ export const Handle: React.FC<HandleProps> = ({
       alignItems: 'center',
       justifyContent: 'center',
       pointerEvents: 'auto' as const,
-      boxShadow: isHovered ? `0 0 0 4px rgba(0,0,0,0.5)` : 'none',
+      boxShadow: isHovered ? `0 0 0 4px ${theme.accent.glow}` : 'none',
     },
-    // Expanded invisible hit area for better UX
     hitArea: {
       position: 'absolute' as const,
       inset: -12,
@@ -60,22 +50,20 @@ export const Handle: React.FC<HandleProps> = ({
       backgroundColor: 'transparent',
       zIndex: -1,
     },
-    // Inner dot
     dot: {
       width: '4px',
       height: '4px',
       borderRadius: '50%',
       backgroundColor: isConnected 
-        ? colors.connected 
-        : isHovered && isConnecting ? colors.validTarget : (isHovered ? colors.accent : colors.inactive),
+        ? theme.content[1] 
+        : isHovered && isConnecting ? theme.accent.valid : (isHovered ? theme.accent.primary : theme.content[3]),
       transition: 'background-color 0.2s ease',
     },
-    // Pulse effect when user is actively looking for a target
     pulse: {
       position: 'absolute' as const,
       inset: -4,
       borderRadius: '50%',
-      backgroundColor: isConnecting ? colors.validTarget : colors.accent,
+      backgroundColor: isConnecting ? theme.accent.valid : theme.accent.primary,
       opacity: isHovered ? 0.4 : 0,
       filter: 'blur(4px)',
       transition: 'opacity 0.2s ease',

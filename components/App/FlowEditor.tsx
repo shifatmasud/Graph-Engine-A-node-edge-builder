@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Node, Edge, Viewport, NodeData, Position } from '../../types';
 import { IPOSlate } from '../Core/NodeBlock'; 
@@ -6,17 +5,20 @@ import { Dock } from '../Section/Dock';
 import { ContextMenu } from '../Section/ContextMenu';
 import { GraphEngine } from '../Core/GraphEngine';
 import { screenToCanvas, generateId } from '../../utils/geometry';
+import { useTheme } from '../Core/ThemeContext';
 
 export const FlowEditor: React.FC = () => {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, zoom: 1 });
   const [activeTool, setActiveTool] = useState<'select' | 'connect' | 'pan'>('select');
+  const { theme } = useTheme();
   
+  // Hidden file input for import
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Context Menu State
   const [contextMenuPos, setContextMenuPos] = useState<Position | null>(null);
-  
-  // Container ref for relative coordinate calculations if needed
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Initial Data
@@ -61,31 +63,34 @@ export const FlowEditor: React.FC = () => {
   }, []);
 
   const handleAddNode = (type: NodeData['type'], screenPos?: Position) => {
-    // If screenPos is provided (from Context Menu), use it. 
-    // Otherwise use center of screen (from Dock)
-    
     const targetX = screenPos ? screenPos.x : window.innerWidth / 2;
     const targetY = screenPos ? screenPos.y : window.innerHeight / 2;
 
     const pos = screenToCanvas(
          { x: targetX, y: targetY },
          viewport,
-         // Approximating container rect as full window for now since it's full screen
          { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight } as DOMRect
     );
 
-    // Default to all handles active
     const handles: Node['handles'] = { top: 1, right: 1, bottom: 1, left: 1 };
-
     const newNode: Node = {
       id: generateId(),
-      position: { x: pos.x - 100, y: pos.y - 25 }, // Center anchor approximation
+      position: { x: pos.x - 100, y: pos.y - 25 },
       data: { label: `New ${type}`, type },
       handles,
       width: 200, 
     };
 
     setNodes(prev => [...prev, newNode]);
+  };
+
+  const handleUpdateNode = (id: string, data: Partial<NodeData>) => {
+    setNodes(prev => prev.map(n => n.id === id ? { ...n, data: { ...n.data, ...data } } : n));
+  };
+
+  const handleDeleteNode = (id: string) => {
+    setNodes(prev => prev.filter(n => n.id !== id));
+    setEdges(prev => prev.filter(e => e.source !== id && e.target !== id));
   };
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -106,13 +111,55 @@ export const FlowEditor: React.FC = () => {
     }
   };
 
+  const exportProject = () => {
+    const project = { version: '1.0', nodes, edges, viewport };
+    const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `nexus-project-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const triggerImport = () => fileInputRef.current?.click();
+
+  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        try {
+            const project = JSON.parse(ev.target?.result as string);
+            if (project.nodes && project.edges) {
+                setNodes(project.nodes);
+                setEdges(project.edges);
+                if (project.viewport) setViewport(project.viewport);
+            }
+        } catch (err) {
+            console.error("Invalid project file");
+        }
+    };
+    reader.readAsText(file);
+    // Reset input
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   return (
     <div 
         ref={containerRef}
-        className="w-full h-screen font-body text-content-1 selection:bg-accent/30 relative"
+        className="w-full h-screen font-body selection:bg-accent/30 relative transition-colors duration-300"
+        style={{ backgroundColor: theme.surface[1], color: theme.content[1] }}
         onContextMenu={handleContextMenu}
     >
-      
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileImport} 
+        style={{ display: 'none' }} 
+        accept=".json"
+      />
+
       {/* Engine Instance */}
       <GraphEngine
         nodes={nodes}
@@ -122,13 +169,24 @@ export const FlowEditor: React.FC = () => {
         viewport={viewport}
         onViewportChange={setViewport}
         activeTool={activeTool}
-        renderNode={(node) => <IPOSlate data={node.data} />}
+        renderNode={(node) => (
+            <IPOSlate 
+                data={node.data} 
+                onUpdate={(data) => handleUpdateNode(node.id, data)}
+                onDelete={() => handleDeleteNode(node.id)}
+            />
+        )}
       />
 
       {/* UI Overlay */}
       <div className="absolute top-6 left-6 pointer-events-none z-50">
-        <h1 className="text-4xl font-display text-content-1 tracking-wider opacity-90 drop-shadow-lg">Nexus Flow</h1>
-        <p className="font-mono text-xs text-accent mt-1 tracking-tight">v3.2 // Mode: {activeTool.toUpperCase()}</p>
+        <h1 
+            className="text-4xl font-display tracking-wider opacity-90 drop-shadow-lg"
+            style={{ color: theme.content[1] }}
+        >Nexus Flow</h1>
+        <p className="font-mono text-xs mt-1 tracking-tight" style={{ color: theme.accent.primary }}>
+            v3.5 // Mode: {activeTool.toUpperCase()}
+        </p>
       </div>
 
       <Dock 
@@ -137,6 +195,8 @@ export const FlowEditor: React.FC = () => {
         onAddNode={(type) => handleAddNode(type)} 
         onClear={() => { setNodes([]); setEdges([]); }}
         onResetView={() => setViewport({ x: 0, y: 0, zoom: 1 })}
+        onImport={triggerImport}
+        onExport={exportProject}
       />
 
       <ContextMenu 

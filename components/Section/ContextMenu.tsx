@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as Icons from 'lucide-react';
@@ -69,9 +68,9 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ position, onClose, onA
   };
 
   const menuItems = [
-    { label: 'Add Input Node', icon: <Icons.BoxSelect size={14} color="#3b82f6" />, action: 'add_node', payload: 'input' },
+    { label: 'Add Input Node', icon: <Icons.LogIn size={14} color="#3b82f6" />, action: 'add_node', payload: 'input' },
     { label: 'Add Process Node', icon: <Icons.Cpu size={14} color="#a855f7" />, action: 'add_node', payload: 'process' },
-    { label: 'Add Output Node', icon: <Icons.HardDrive size={14} color="#22c55e" />, action: 'add_node', payload: 'output' },
+    { label: 'Add Output Node', icon: <Icons.LogOut size={14} color="#22c55e" />, action: 'add_node', payload: 'output' },
     { separator: true },
     { label: 'Reset View', icon: <Icons.Focus size={14} />, action: 'reset_view' },
     { label: 'Clear Canvas', icon: <Icons.Trash2 size={14} color="#ef4444" />, action: 'clear_canvas' },
