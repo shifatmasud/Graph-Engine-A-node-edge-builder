@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { motion, MotionValue, useTransform } from 'framer-motion';
 import { getBezierPath } from '../../utils/geometry';
@@ -14,6 +13,7 @@ interface EdgeConnectorProps {
   targetSide: Side;
   isSelected?: boolean;
   isConnectMode?: boolean;
+  isPanMode?: boolean; // New prop
   onSelect?: (id: string) => void;
   onDelete?: (id: string) => void;
 }
@@ -41,6 +41,7 @@ export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
   targetSide,
   isSelected,
   isConnectMode,
+  isPanMode = false,
   onSelect,
   onDelete,
 }) => {
@@ -92,15 +93,15 @@ export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={(e) => {
-        e.stopPropagation();
+        if (!isPanMode) e.stopPropagation();
         if (!isConnectMode) {
           onSelect?.(id);
         }
       }}
       onPointerDown={(e) => {
-        e.stopPropagation();
+        if (!isPanMode) e.stopPropagation();
       }}
-      style={{ cursor: isConnectMode ? 'default' : 'pointer' }}
+      style={{ cursor: isConnectMode ? 'default' : (isPanMode ? 'grab' : 'pointer') }}
     >
       {/* Hit Area - Expanded for easier interaction */}
       <motion.path

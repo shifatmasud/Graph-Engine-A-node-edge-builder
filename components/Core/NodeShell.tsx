@@ -1,4 +1,3 @@
-
 import React, { useRef, useLayoutEffect, useEffect } from 'react';
 import { motion, MotionValue, PanInfo } from 'framer-motion';
 import { Handle } from './Handle';
@@ -11,6 +10,7 @@ interface NodeShellProps {
   isSelected: boolean;
   isConnecting?: boolean; // Is the global state currently in "Connecting" mode?
   isDraggable?: boolean; // Controls if node can be dragged
+  isPanMode?: boolean; // New: Controls if we are in Pan mode
   showHandles?: boolean; // Only show handles in "Connector" mode
   handles?: Partial<Record<Side, number>>;
   width?: number;
@@ -42,6 +42,7 @@ export const NodeShell: React.FC<NodeShellProps> = ({
   isSelected,
   isConnecting,
   isDraggable = true,
+  isPanMode = false,
   showHandles = false,
   handles = { top: 0, right: 0, bottom: 0, left: 0 },
   width = 200, // Match default engine width to avoid misalignment
@@ -126,7 +127,7 @@ export const NodeShell: React.FC<NodeShellProps> = ({
       backdropFilter: 'blur(12px)',
       boxShadow: isSelected ? theme.glow.selected : theme.glow.idle,
       border: `1px solid ${isSelected ? theme.border.selected : theme.border.idle}`,
-      cursor: isDraggable ? 'grab' : 'default',
+      cursor: isDraggable ? 'grab' : (isPanMode ? 'grab' : 'default'),
       zIndex: isSelected ? 100 : 10,
       transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
       display: 'flex',
@@ -151,8 +152,12 @@ export const NodeShell: React.FC<NodeShellProps> = ({
       dragMomentum={false}
       onDragEnd={handleDragEnd}
       onPointerDown={(e) => {
-        e.stopPropagation(); 
-        onSelect(id);
+        // Allow event propagation if we are in Pan Mode so the canvas can catch it.
+        // Also disable selection in Pan mode to avoid accidental selection.
+        if (!isPanMode) {
+            e.stopPropagation(); 
+            onSelect(id);
+        }
       }}
       initial={{ scale: 0.9, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}

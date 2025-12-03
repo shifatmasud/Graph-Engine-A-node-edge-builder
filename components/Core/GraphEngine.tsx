@@ -1,6 +1,5 @@
-
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { motion, AnimatePresence, motionValue, MotionValue } from 'framer-motion';
+import { motion, AnimatePresence, motionValue, MotionValue, useMotionValue, useTransform } from 'framer-motion';
 import { Node, Edge, Viewport, Position, NodeData, Side, PendingConnection } from '../../types';
 import { NodeShell } from './NodeShell';
 import { ConnectionLine } from './ConnectionLine';
@@ -33,6 +32,22 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const nodeMotionValues = useRef(new Map<string, { x: MotionValue<number>; y: MotionValue<number> }>());
 
+  // Motion Values for high-performance panning (bypassing React State loop)
+  const viewX = useMotionValue(viewport.x);
+  const viewY = useMotionValue(viewport.y);
+  const viewZoom = useMotionValue(viewport.zoom);
+
+  // Sync React State Props to MotionValues
+  useEffect(() => {
+    viewX.set(viewport.x);
+    viewY.set(viewport.y);
+    viewZoom.set(viewport.zoom);
+  }, [viewport, viewX, viewY, viewZoom]);
+
+  // Derived Transforms for Grid
+  const bgPosition = useTransform([viewX, viewY], ([x, y]) => `${x}px ${y}px`);
+  const bgSize = useTransform(viewZoom, z => `${20 * z}px ${20 * z}px`);
+
   // Selection
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
@@ -44,6 +59,10 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
   // Panning State
   const isPanning = useRef(false);
   const lastMousePos = useRef<Position>({ x: 0, y: 0 });
+  
+  // Refs to access latest callbacks without closure staleness during event listeners
+  const onViewportChangeRef = useRef(onViewportChange);
+  useEffect(() => { onViewportChangeRef.current = onViewportChange; }, [onViewportChange]);
 
   // --- Synchronization ---
 
@@ -97,6 +116,45 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedNodeId, selectedEdgeId, nodes, edges, onNodesChange, onEdgesChange, readOnly]);
 
+  // --- Global Pan Handlers ---
+
+  const handleWindowPointerMove = useCallback((e: PointerEvent) => {
+    if (isPanning.current) {
+      e.preventDefault();
+      const dx = e.clientX - lastMousePos.current.x;
+      const dy = e.clientY - lastMousePos.current.y;
+      
+      // Direct manipulation of MotionValues for 60fps performance
+      viewX.set(viewX.get() + dx);
+      viewY.set(viewY.get() + dy);
+
+      lastMousePos.current = { x: e.clientX, y: e.clientY };
+    }
+  }, [viewX, viewY]);
+
+  const handleWindowPointerUp = useCallback(() => {
+    if (isPanning.current) {
+        isPanning.current = false;
+        window.removeEventListener('pointermove', handleWindowPointerMove);
+        window.removeEventListener('pointerup', handleWindowPointerUp);
+        
+        // Sync back to React State for persistence on drag end
+        onViewportChangeRef.current({
+            x: viewX.get(),
+            y: viewY.get(),
+            zoom: viewZoom.get()
+        });
+    }
+  }, [handleWindowPointerMove, viewX, viewY, viewZoom]);
+
+  // Cleanup listeners on unmount
+  useEffect(() => {
+    return () => {
+      window.removeEventListener('pointermove', handleWindowPointerMove);
+      window.removeEventListener('pointerup', handleWindowPointerUp);
+    };
+  }, [handleWindowPointerMove, handleWindowPointerUp]);
+
   // --- Handlers ---
 
   const handleNodeDrag = useCallback((id: string, x: number, y: number) => {
@@ -106,23 +164,25 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
   }, [nodes, onNodesChange, readOnly, activeTool]);
 
   const handleNodeResize = useCallback((id: string, width: number, height: number) => {
-    // Optimization: Only update if dimensions actually changed significantly
     const node = nodes.find(n => n.id === id);
     if (!node) return;
-    
-    // Tolerance of 1px
     if (Math.abs((node.width || 0) - width) > 1 || Math.abs((node.height || 0) - height) > 1) {
        onNodesChange(nodes.map(n => n.id === id ? { ...n, width, height } : n));
     }
   }, [nodes, onNodesChange]);
 
-  const handleCanvasMouseDown = (e: React.MouseEvent) => {
+  const handleCanvasPointerDown = (e: React.PointerEvent) => {
     // Enable panning if middle mouse click OR Alt + Left Click OR (Left Click and Pan Tool Active)
     if (e.button === 1 || (e.button === 0 && e.altKey) || (activeTool === 'pan' && e.button === 0)) {
       isPanning.current = true;
+      e.preventDefault(); // Important: prevent native text selection/dragging
       lastMousePos.current = { x: e.clientX, y: e.clientY };
+      window.addEventListener('pointermove', handleWindowPointerMove);
+      window.addEventListener('pointerup', handleWindowPointerUp);
       return;
     }
+
+    // Deselect if clicking on empty canvas
     if (e.target === containerRef.current) {
       setSelectedNodeId(null);
       setSelectedEdgeId(null);
@@ -130,18 +190,13 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     }
   };
 
-  const handleCanvasMouseMove = (e: React.MouseEvent) => {
+  const handleCanvasPointerMove = (e: React.PointerEvent) => {
+    if (isPanning.current) return;
+    
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const pos = screenToCanvas({ x: e.clientX, y: e.clientY }, viewport, rect);
       setMouseCanvasPos(pos);
-    }
-
-    if (isPanning.current) {
-      const dx = e.clientX - lastMousePos.current.x;
-      const dy = e.clientY - lastMousePos.current.y;
-      onViewportChange({ ...viewport, x: viewport.x + dx, y: viewport.y + dy });
-      lastMousePos.current = { x: e.clientX, y: e.clientY };
     }
   };
 
@@ -161,12 +216,9 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     e.stopPropagation();
 
     if (!pendingConnection) {
-      // Start Connection
       const node = nodes.find(n => n.id === nodeId);
       if (!node) return;
-      
       const offset = getHandleOffset(node, side, index);
-      
       setPendingConnection({
         sourceNodeId: nodeId,
         sourceHandle: index,
@@ -174,19 +226,16 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
         startPos: { x: node.position.x + offset.x, y: node.position.y + offset.y }
       });
     } else {
-      // End Connection
       if (pendingConnection.sourceNodeId === nodeId) {
         setPendingConnection(null);
         return;
       }
-
       const exists = edges.some(edge => 
         edge.source === pendingConnection.sourceNodeId && 
         edge.target === nodeId &&
         edge.sourceHandle === pendingConnection.sourceHandle &&
         edge.targetHandle === index
       );
-
       if (!exists) {
         const newEdge: Edge = {
           id: generateId(),
@@ -203,19 +252,15 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     }
   };
 
-  // Helper
   const getHandleOffset = (node: Node, side: Side, index: number) => {
-    // IMPORTANT: Default width/height must match NodeShell defaults to avoid misalignment
     const width = node.width || 200; 
     const height = node.height || 100;
     const gap = 12;
     const handleSize = 14;
     const count = node.handles[side] || 0;
-    
     const totalSpread = (count * handleSize) + ((count - 1) * gap);
     const startFromCenter = -totalSpread / 2 + handleSize / 2;
     const offsetInGroup = startFromCenter + (index * (handleSize + gap));
-
     if (side === 'left') return { x: 0, y: height / 2 + offsetInGroup };
     if (side === 'right') return { x: width, y: height / 2 + offsetInGroup };
     if (side === 'top') return { x: width / 2 + offsetInGroup, y: 0 };
@@ -231,32 +276,31 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
   return (
     <div className="w-full h-full relative overflow-hidden bg-surface-1">
        {/* Grid Background */}
-       <div 
+       <motion.div 
         className="absolute inset-0 pointer-events-none opacity-20"
         style={{
           backgroundImage: `radial-gradient(#52525b 1px, transparent 1px)`,
-          backgroundSize: `${20 * viewport.zoom}px ${20 * viewport.zoom}px`,
-          backgroundPosition: `${viewport.x}px ${viewport.y}px`
+          backgroundSize: bgSize,
+          backgroundPosition: bgPosition
         }}
       />
 
       <div
         ref={containerRef}
         className={`w-full h-full ${getCursorClass()}`}
-        onMouseDown={handleCanvasMouseDown}
-        onMouseMove={handleCanvasMouseMove}
-        onMouseUp={() => { isPanning.current = false; }}
+        onPointerDown={handleCanvasPointerDown}
+        onPointerMove={handleCanvasPointerMove}
         onWheel={handleWheel}
         onContextMenu={e => e.preventDefault()}
+        style={{ touchAction: 'none' }}
       >
         <motion.div
           className="w-full h-full origin-top-left"
-          animate={{
-            x: viewport.x,
-            y: viewport.y,
-            scale: viewport.zoom
+          style={{
+            x: viewX,
+            y: viewY,
+            scale: viewZoom
           }}
-          transition={{ type: "tween", ease: "linear", duration: 0 }}
         >
           {/* Edge Layer */}
           <svg className="overflow-visible absolute top-0 left-0 w-full h-full pointer-events-none z-0">
@@ -268,7 +312,6 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
                 const targetNodeMVs = nodeMotionValues.current.get(edge.target);
                 const sNode = nodes.find(n => n.id === edge.source);
                 const tNode = nodes.find(n => n.id === edge.target);
-                
                 if (!sourceNodeMVs || !targetNodeMVs || !sNode || !tNode) return null;
 
                 const sourceOffset = getHandleOffset(sNode, edge.sourceSide, edge.sourceHandle);
@@ -286,6 +329,7 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
                     targetSide={edge.targetSide}
                     isSelected={selectedEdgeId === edge.id}
                     isConnectMode={activeTool === 'connect'}
+                    isPanMode={activeTool === 'pan'}
                     onSelect={(id) => {
                       if (readOnly || activeTool !== 'select') return;
                       setSelectedEdgeId(id);
@@ -327,6 +371,7 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
                     showHandles={activeTool === 'connect'}
                     isDraggable={activeTool === 'select'}
                     isConnecting={!!pendingConnection}
+                    isPanMode={activeTool === 'pan'}
                     onDrag={handleNodeDrag}
                     onSelect={(id) => {
                       if (activeTool === 'select') {
