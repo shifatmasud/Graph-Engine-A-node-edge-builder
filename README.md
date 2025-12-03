@@ -1,11 +1,37 @@
-<div align="center">
+# Nexus Flow - Custom Node Editor
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+A premium, custom-built node editor using React 18, Tailwind CSS, and Framer Motion. This project demonstrates a high-performance visual interface without relying on heavy external node-graph libraries.
 
-  <h1>Built with AI Studio</h2>
+## Architecture
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+- **IPO Model**:
+  - **Input**: Mouse events (Drag, Click, Scroll).
+  - **Process**: Geometry calculations (Bezier curves, Viewport transforms), State updates (Nodes, Edges).
+  - **Output**: Rendered Canvas (SVG Layer + HTML Nodes).
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+- **Stack**:
+  - React 18 (Hooks oriented)
+  - TypeScript (Strict typing)
+  - Tailwind CSS (Styling)
+  - Framer Motion (Interactions & Animations)
+  - Lucide React (Icons)
 
-</div>
+## Features
+
+- **Infinite Canvas**: Pan (Alt+Drag) and Zoom (Ctrl+Wheel).
+- **Custom Nodes**: Draggable nodes with inputs/outputs.
+- **Bezier Connections**: Smooth SVG paths connecting nodes.
+- **Dynamic Dock**: Floating control palette.
+- **Premium UI**: Glassmorphism, Semantic Color System, Typography.
+
+## Directory Structure
+
+```
+/
+├── components/
+│   ├── Core/           # Primitive Blocks (Node, Handle, Line)
+│   ├── Section/        # UI Sections (Dock)
+│   └── App/            # Logic Containers (FlowEditor)
+├── utils/              # Math & Helpers
+└── types.ts            # Global TS Definitions
+```

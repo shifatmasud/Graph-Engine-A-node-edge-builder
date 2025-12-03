@@ -1,0 +1,5 @@
+{
+  "name": "Nexus Flow",
+  "description": "A premium, custom node-based visual interface featuring draggable nodes, bezier connections, and infinite canvas interactions.",
+  "requestFramePermissions": []
+}
