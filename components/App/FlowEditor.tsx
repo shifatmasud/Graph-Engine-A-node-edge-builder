@@ -93,6 +93,30 @@ export const FlowEditor: React.FC = () => {
     setEdges(prev => prev.filter(e => e.source !== id && e.target !== id));
   };
 
+  const handleCopyGlobalPseudo = () => {
+    let output = "// NEXUS FLOW GLOBAL PSEUDO CODE\n\n// --- NODES ---\n";
+    
+    nodes.forEach(n => {
+        output += `[${n.data.type.toUpperCase()}] ${n.data.label}`;
+        if (n.data.value !== undefined && n.data.value !== '') {
+            output += ` = ${n.data.value}`;
+        }
+        output += '\n';
+    });
+
+    output += "\n// --- CONNECTIONS ---\n";
+    
+    edges.forEach(e => {
+        const source = nodes.find(n => n.id === e.source);
+        const target = nodes.find(n => n.id === e.target);
+        if (source && target) {
+            output += `${source.data.label} --> ${target.data.label}\n`;
+        }
+    });
+
+    navigator.clipboard.writeText(output);
+  };
+
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     if (activeTool === 'select') {
@@ -108,6 +132,8 @@ export const FlowEditor: React.FC = () => {
     } else if (action === 'clear_canvas') {
         setNodes([]);
         setEdges([]);
+    } else if (action === 'copy_pseudo') {
+        handleCopyGlobalPseudo();
     }
   };
 
@@ -197,6 +223,7 @@ export const FlowEditor: React.FC = () => {
         onResetView={() => setViewport({ x: 0, y: 0, zoom: 1 })}
         onImport={triggerImport}
         onExport={exportProject}
+        onCopyPseudo={handleCopyGlobalPseudo}
       />
 
       <ContextMenu 

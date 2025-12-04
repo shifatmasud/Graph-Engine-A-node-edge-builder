@@ -83,6 +83,10 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (readOnly) return;
       
+      const target = e.target as HTMLElement;
+      const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable;
+      if (isInput) return;
+
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedNodeId) {
           onNodesChange(nodes.filter(n => n.id !== selectedNodeId));

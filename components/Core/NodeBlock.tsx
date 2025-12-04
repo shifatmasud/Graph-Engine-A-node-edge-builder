@@ -43,6 +43,12 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
     }
   };
 
+  const handleCopyPseudo = () => {
+    const pseudo = `// ${data.type.toUpperCase()} NODE\n${data.label} = ${data.value || 'null'};`;
+    navigator.clipboard.writeText(pseudo);
+    setShowMenu(false);
+  };
+
   const getNodeSpecificActions = () => {
     switch(data.type) {
       case 'input':
@@ -259,6 +265,19 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                 onClick={(e) => {
                   e.stopPropagation();
+                  handleCopyPseudo();
+                }}
+              >
+                <Icons.Code size={12} />
+                Copy Pseudo Code
+              </button>
+
+              <button 
+                style={styles.menuItem}
+                onMouseEnter={(e) => e.currentTarget.style.background = theme.surface[3]}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                onClick={(e) => {
+                  e.stopPropagation();
                   setShowMenu(false);
                   setIsEditing(true);
                 }}
@@ -288,14 +307,14 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
         {isEditing ? (
            <input
              style={styles.input}
-             value={editValues.value || ''}
+             value={editValues.value ?? ''}
              onChange={(e) => setEditValues(prev => ({...prev, value: e.target.value}))}
              placeholder="Enter value..."
              onKeyDown={(e) => e.key === 'Enter' && handleSave()}
            />
         ) : (
           <span style={styles.label}>
-            {data.value ? `Value: ${data.value}` : 'Configure node parameters...'}
+            {(data.value !== undefined && data.value !== '') ? data.value : 'Configure node parameters...'}
           </span>
         )}
         <span style={styles.typeTag}>

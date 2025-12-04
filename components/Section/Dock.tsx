@@ -12,6 +12,7 @@ interface DockProps {
   onResetView: () => void;
   onImport: () => void;
   onExport: () => void;
+  onCopyPseudo: () => void;
 }
 
 export const Dock: React.FC<DockProps> = ({ 
@@ -21,7 +22,8 @@ export const Dock: React.FC<DockProps> = ({
   onClear, 
   onResetView,
   onImport,
-  onExport
+  onExport,
+  onCopyPseudo
 }) => {
   const [activeMenu, setActiveMenu] = useState<'none' | 'add' | 'settings'>('none');
   const { theme, toggle, mode } = useTheme();
@@ -113,6 +115,7 @@ export const Dock: React.FC<DockProps> = ({
              <div style={{ height: 1, background: theme.surface[3], margin: '4px 0' }} />
             <DockMenuItem icon={<Icons.Upload size={16} />} label="Import JSON" onClick={() => { onImport(); setActiveMenu('none'); }} />
             <DockMenuItem icon={<Icons.Download size={16} />} label="Export JSON" onClick={() => { onExport(); setActiveMenu('none'); }} />
+            <DockMenuItem icon={<Icons.Code size={16} />} label="Copy Pseudo Code" onClick={() => { onCopyPseudo(); setActiveMenu('none'); }} />
              <div style={{ height: 1, background: theme.surface[3], margin: '4px 0' }} />
              <DockMenuItem icon={<Icons.Focus size={16} />} label="Center View" onClick={() => { onResetView(); setActiveMenu('none'); }} />
              <DockMenuItem icon={<Icons.Trash2 size={16} color={theme.accent.danger} />} label="Clear All" onClick={() => { onClear(); setActiveMenu('none'); }} />

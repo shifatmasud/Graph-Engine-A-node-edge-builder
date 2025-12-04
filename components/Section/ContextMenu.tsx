@@ -72,6 +72,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ position, onClose, onA
     { label: 'Add Process Node', icon: <Icons.Cpu size={14} color="#a855f7" />, action: 'add_node', payload: 'process' },
     { label: 'Add Output Node', icon: <Icons.LogOut size={14} color="#22c55e" />, action: 'add_node', payload: 'output' },
     { separator: true },
+    { label: 'Copy Pseudo Code', icon: <Icons.Code size={14} />, action: 'copy_pseudo' },
     { label: 'Reset View', icon: <Icons.Focus size={14} />, action: 'reset_view' },
     { label: 'Clear Canvas', icon: <Icons.Trash2 size={14} color="#ef4444" />, action: 'clear_canvas' },
   ];
