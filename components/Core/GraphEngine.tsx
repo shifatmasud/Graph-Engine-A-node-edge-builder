@@ -19,6 +19,18 @@ interface GraphEngineProps {
   activeTool?: 'select' | 'connect' | 'pan';
 }
 
+// Helpers
+const getDistance = (p1: React.PointerEvent, p2: React.PointerEvent) => {
+  return Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY);
+};
+
+const getCenter = (p1: React.PointerEvent, p2: React.PointerEvent) => {
+  return {
+    x: (p1.clientX + p2.clientX) / 2,
+    y: (p1.clientY + p2.clientY) / 2,
+  };
+};
+
 export const GraphEngine: React.FC<GraphEngineProps> = ({
   nodes,
   edges,
@@ -34,31 +46,37 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
   const nodeMotionValues = useRef(new Map<string, { x: MotionValue<number>; y: MotionValue<number> }>());
   const { theme } = useTheme();
 
+  // MotionValues for high-performance transformations
   const viewX = useMotionValue(viewport.x);
   const viewY = useMotionValue(viewport.y);
   const viewZoom = useMotionValue(viewport.zoom);
 
-  useEffect(() => {
-    viewX.set(viewport.x);
-    viewY.set(viewport.y);
-    viewZoom.set(viewport.zoom);
-  }, [viewport, viewX, viewY, viewZoom]);
-
+  // Grid background transforms
   const bgPosition = useTransform([viewX, viewY], ([x, y]) => `${x}px ${y}px`);
   const bgSize = useTransform(viewZoom, z => `${20 * z}px ${20 * z}px`);
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
-
   const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(null);
   const [mouseCanvasPos, setMouseCanvasPos] = useState<Position>({ x: 0, y: 0 });
 
-  const isPanning = useRef(false);
-  const lastMousePos = useRef<Position>({ x: 0, y: 0 });
-  
-  const onViewportChangeRef = useRef(onViewportChange);
-  useEffect(() => { onViewportChangeRef.current = onViewportChange; }, [onViewportChange]);
+  // Gesture State
+  const pointerCache = useRef<Map<number, React.PointerEvent>>(new Map());
+  const prevPinchInfo = useRef<{ dist: number; center: Position } | null>(null);
+  const lastPanPos = useRef<Position | null>(null);
+  const isGestureActive = useRef(false);
+  const gestureStartPos = useRef<Position | null>(null);
 
+  // Sync MotionValues when props change (e.g. undo/redo or initial load)
+  useEffect(() => {
+    if (!isGestureActive.current) {
+      viewX.set(viewport.x);
+      viewY.set(viewport.y);
+      viewZoom.set(viewport.zoom);
+    }
+  }, [viewport, viewX, viewY, viewZoom]);
+
+  // Sync Node MotionValues
   useEffect(() => {
     nodes.forEach(node => {
       let mvs = nodeMotionValues.current.get(node.id);
@@ -79,6 +97,7 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     }
   }, [nodes]);
 
+  // Keyboard Handling
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (readOnly) return;
@@ -109,36 +128,160 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedNodeId, selectedEdgeId, nodes, edges, onNodesChange, onEdgesChange, readOnly]);
 
-  const handleWindowPointerMove = useCallback((e: PointerEvent) => {
-    if (isPanning.current) {
-      e.preventDefault();
-      const dx = e.clientX - lastMousePos.current.x;
-      const dy = e.clientY - lastMousePos.current.y;
+  // --- Unified Pointer Handling (Touch + Mouse) ---
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    (e.target as Element).setPointerCapture(e.pointerId);
+    pointerCache.current.set(e.pointerId, e);
+    
+    // Check if background tap
+    if (e.target === containerRef.current) {
+      gestureStartPos.current = { x: e.clientX, y: e.clientY };
+    }
+
+    if (pointerCache.current.size === 2) {
+      // Initialize Pinch
+      const points = Array.from(pointerCache.current.values());
+      prevPinchInfo.current = {
+        dist: getDistance(points[0], points[1]),
+        center: getCenter(points[0], points[1])
+      };
+      isGestureActive.current = true;
+      lastPanPos.current = null; // Clear single finger pan
+    } else if (pointerCache.current.size === 1) {
+      // Check Pan conditions
+      const isTouch = e.pointerType === 'touch';
+      const isPanTool = activeTool === 'pan';
+      const isMiddleBtn = e.button === 1;
+      const isAltKey = e.button === 0 && e.altKey;
+
+      if (isTouch || isPanTool || isMiddleBtn || isAltKey) {
+        isGestureActive.current = true;
+        lastPanPos.current = { x: e.clientX, y: e.clientY };
+      }
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    pointerCache.current.set(e.pointerId, e);
+
+    // Update Mouse Pos for Connection Line (projected to canvas)
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const currentViewport = { x: viewX.get(), y: viewY.get(), zoom: viewZoom.get() };
+      setMouseCanvasPos(screenToCanvas({ x: e.clientX, y: e.clientY }, currentViewport, rect));
+    }
+
+    if (pointerCache.current.size === 2 && prevPinchInfo.current) {
+      // --- Handle Pinch Zoom ---
+      const points = Array.from(pointerCache.current.values());
+      const newDist = getDistance(points[0], points[1]);
+      const newCenter = getCenter(points[0], points[1]);
+      
+      const oldZoom = viewZoom.get();
+      const zoomFactor = newDist / prevPinchInfo.current.dist;
+      const newZoom = Math.min(Math.max(oldZoom * zoomFactor, 0.1), 5);
+
+      // Pan adjustment to zoom towards center
+      // Formula: NewPan = NewCenter - (PointUnderCursor * NewZoom)
+      // PointUnderCursor = (OldCenter - OldPan) / OldZoom
+      const pointUnderCursorX = (prevPinchInfo.current.center.x - viewX.get()) / oldZoom;
+      const pointUnderCursorY = (prevPinchInfo.current.center.y - viewY.get()) / oldZoom;
+
+      const newX = newCenter.x - (pointUnderCursorX * newZoom);
+      const newY = newCenter.y - (pointUnderCursorY * newZoom);
+
+      viewX.set(newX);
+      viewY.set(newY);
+      viewZoom.set(newZoom);
+
+      prevPinchInfo.current = { dist: newDist, center: newCenter };
+
+    } else if (pointerCache.current.size === 1 && lastPanPos.current) {
+      // --- Handle Pan ---
+      const dx = e.clientX - lastPanPos.current.x;
+      const dy = e.clientY - lastPanPos.current.y;
+
       viewX.set(viewX.get() + dx);
       viewY.set(viewY.get() + dy);
-      lastMousePos.current = { x: e.clientX, y: e.clientY };
+      
+      lastPanPos.current = { x: e.clientX, y: e.clientY };
     }
-  }, [viewX, viewY]);
+  };
 
-  const handleWindowPointerUp = useCallback(() => {
-    if (isPanning.current) {
-        isPanning.current = false;
-        window.removeEventListener('pointermove', handleWindowPointerMove);
-        window.removeEventListener('pointerup', handleWindowPointerUp);
-        onViewportChangeRef.current({
-            x: viewX.get(),
-            y: viewY.get(),
-            zoom: viewZoom.get()
+  const handlePointerUp = (e: React.PointerEvent) => {
+    (e.target as Element).releasePointerCapture(e.pointerId);
+    pointerCache.current.delete(e.pointerId);
+
+    // Reset Pinch if fingers lifted
+    if (pointerCache.current.size < 2) {
+      prevPinchInfo.current = null;
+    }
+    
+    // Reset Pan if all fingers lifted
+    if (pointerCache.current.size === 0) {
+      // Check for Click (Tap) on background to deselect
+      if (gestureStartPos.current) {
+        const dist = Math.hypot(e.clientX - gestureStartPos.current.x, e.clientY - gestureStartPos.current.y);
+        if (dist < 5 && e.target === containerRef.current) {
+           setSelectedNodeId(null);
+           setSelectedEdgeId(null);
+           setPendingConnection(null);
+        }
+      }
+
+      if (isGestureActive.current) {
+        isGestureActive.current = false;
+        // Commit changes to React State
+        onViewportChange({
+          x: viewX.get(),
+          y: viewY.get(),
+          zoom: viewZoom.get()
         });
+      }
+      lastPanPos.current = null;
+      gestureStartPos.current = null;
+    } else if (pointerCache.current.size === 1) {
+      // If we went from 2 fingers to 1, reset pan anchor to prevent jump
+      const point = pointerCache.current.values().next().value;
+      if (point) lastPanPos.current = { x: point.clientX, y: point.clientY };
     }
-  }, [handleWindowPointerMove, viewX, viewY, viewZoom]);
+  };
 
-  useEffect(() => {
-    return () => {
-      window.removeEventListener('pointermove', handleWindowPointerMove);
-      window.removeEventListener('pointerup', handleWindowPointerUp);
-    };
-  }, [handleWindowPointerMove, handleWindowPointerUp]);
+  // Legacy Wheel support (Desktop)
+  const handleWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const zoomSensitivity = 0.001;
+      const oldZoom = viewZoom.get();
+      const newZoom = Math.min(Math.max(oldZoom - e.deltaY * zoomSensitivity, 0.1), 3);
+      
+      // Calculate zoom center (mouse position)
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect) {
+          const mouseX = e.clientX - rect.left;
+          const mouseY = e.clientY - rect.top;
+          
+          // Point under mouse in canvas space
+          const pointX = (mouseX - viewX.get()) / oldZoom;
+          const pointY = (mouseY - viewY.get()) / oldZoom;
+          
+          const newX = mouseX - (pointX * newZoom);
+          const newY = mouseY - (pointY * newZoom);
+          
+          viewX.set(newX);
+          viewY.set(newY);
+          viewZoom.set(newZoom);
+          onViewportChange({ x: newX, y: newY, zoom: newZoom });
+      }
+    } else {
+      const newX = viewX.get() - e.deltaX;
+      const newY = viewY.get() - e.deltaY;
+      viewX.set(newX);
+      viewY.set(newY);
+      onViewportChange({ x: newX, y: newY, zoom: viewZoom.get() });
+    }
+  };
 
   const handleNodeDrag = useCallback((id: string, x: number, y: number) => {
     if (readOnly || activeTool !== 'select') return;
@@ -153,41 +296,6 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
        onNodesChange(nodes.map(n => n.id === id ? { ...n, width, height } : n));
     }
   }, [nodes, onNodesChange]);
-
-  const handleCanvasPointerDown = (e: React.PointerEvent) => {
-    if (e.button === 1 || (e.button === 0 && e.altKey) || (activeTool === 'pan' && e.button === 0)) {
-      isPanning.current = true;
-      e.preventDefault(); 
-      lastMousePos.current = { x: e.clientX, y: e.clientY };
-      window.addEventListener('pointermove', handleWindowPointerMove);
-      window.addEventListener('pointerup', handleWindowPointerUp);
-      return;
-    }
-    if (e.target === containerRef.current) {
-      setSelectedNodeId(null);
-      setSelectedEdgeId(null);
-      setPendingConnection(null);
-    }
-  };
-
-  const handleCanvasPointerMove = (e: React.PointerEvent) => {
-    if (isPanning.current) return;
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      const pos = screenToCanvas({ x: e.clientX, y: e.clientY }, viewport, rect);
-      setMouseCanvasPos(pos);
-    }
-  };
-
-  const handleWheel = (e: React.WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
-      const zoomSensitivity = 0.001;
-      const newZoom = Math.min(Math.max(viewport.zoom - e.deltaY * zoomSensitivity, 0.1), 3);
-      onViewportChange({ ...viewport, zoom: newZoom });
-    } else {
-      onViewportChange({ ...viewport, x: viewport.x - e.deltaX, y: viewport.y - e.deltaY });
-    }
-  };
 
   const handleHandleClick = (e: React.MouseEvent, nodeId: string, index: number, side: Side) => {
     if (readOnly || activeTool !== 'connect') return;
@@ -267,8 +375,11 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
       <div
         ref={containerRef}
         className={`w-full h-full ${getCursorClass()}`}
-        onPointerDown={handleCanvasPointerDown}
-        onPointerMove={handleCanvasPointerMove}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onPointerLeave={handlePointerUp}
         onWheel={handleWheel}
         onContextMenu={e => e.preventDefault()}
         style={{ touchAction: 'none' }}
