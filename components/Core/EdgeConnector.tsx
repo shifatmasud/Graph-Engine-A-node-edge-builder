@@ -57,35 +57,51 @@ export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
       strokeLinecap: 'round' as const,
       stroke: theme.content[3],
       strokeWidth: '1.5px',
-      strokeOpacity: 0.6,
+      strokeOpacity: 0.5,
     },
-    animatedCircle: {
-      fill: theme.accent.primary,
-    },
+    flowPath: {
+      fill: 'none',
+      strokeLinecap: 'round' as const,
+      strokeWidth: '2.5px',
+      filter: `drop-shadow(0 0 4px ${theme.accent.glow})`,
+    }
   };
 
   return (
     <g style={{ cursor: isPanMode ? 'grab' : 'default' }}>
-      {/* Main Line */}
+       <defs>
+        <linearGradient id={`grad-flow-${id}`} x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor={theme.accent.secondary} />
+          <stop offset="100%" stopColor={theme.accent.primary} />
+        </linearGradient>
+      </defs>
+
+      {/* Main Line (Base) */}
       <motion.path
         d={pathData}
         style={styles.mainPath}
       />
       
-      {/* Flow animation */}
+      {/* Animated gradient segment */}
       <AnimatePresence>
         {showFlow && (
-          <motion.circle
-            r={2.5}
-            style={styles.animatedCircle}
+          <motion.path
+            d={pathData}
+            style={{
+              ...styles.flowPath,
+              strokeDasharray: '40 500',
+              stroke: `url(#grad-flow-${id})`,
+            }}
           >
-            <motion.animateMotion
-              dur={"4s"} 
+            <animate
+              attributeName="stroke-dashoffset"
+              from="0"
+              to="-540"
+              dur="4s"
               repeatCount="indefinite"
-              path={pathData}
               calcMode="linear"
             />
-          </motion.circle>
+          </motion.path>
         )}
       </AnimatePresence>
 
