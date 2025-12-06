@@ -37,7 +37,7 @@ export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
   const { theme, mode } = useTheme();
   
   // Animation config
-  const PACKET_DURATION = 1.5;
+  const PACKET_DURATION = 4; // Slower, gentler animation
   const delay = depth * PACKET_DURATION;
   // If maxDepth is 0 (single layer), we just loop continuously.
   // If multiple layers, we wait for the full cycle of the graph to complete.
@@ -86,20 +86,13 @@ export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
 
   return (
     <g style={{ cursor: isPanMode ? 'grab' : 'default' }}>
-       <defs>
-        <linearGradient id={`grad-flow-${id}`} x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor={theme.content[2]} />
-          <stop offset="100%" stopColor={theme.content[1]} />
-        </linearGradient>
-      </defs>
-
       {/* Main Line (Base) */}
       <motion.path
         d={pathData}
         style={styles.mainPath}
       />
       
-      {/* Animated gradient segment */}
+      {/* Animated segment */}
       <AnimatePresence>
         {showFlow && (
           <motion.path
@@ -107,16 +100,16 @@ export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
             pathLength={1} // Normalize path length for consistent timing regardless of edge pixel length
             style={{
               ...styles.flowPath,
-              // Dash array relative to pathLength=1. 0.2 is the packet size (20%), 2 is the gap.
-              strokeDasharray: '0.2 2', 
-              stroke: `url(#grad-flow-${id})`,
+              // Dash array relative to pathLength=1. 0.3 is the packet size (30%), 2 is the gap.
+              strokeDasharray: '0.3 2', 
+              stroke: theme.content[2],
               opacity: 0.8
             }}
-            initial={{ strokeDashoffset: 0.2 }} // Start just "before" the path
+            initial={{ strokeDashoffset: 0.3 }} // Start just "before" the path
             animate={{ strokeDashoffset: -1 }} // End just "after" the path
             transition={{
               duration: PACKET_DURATION,
-              ease: "easeInOut",
+              ease: "linear",
               delay: delay,
               repeat: Infinity,
               repeatDelay: repeatDelay
