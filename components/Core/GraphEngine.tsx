@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useEffect } from 'react';
+import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence, motionValue, MotionValue, useMotionValue, useTransform } from 'framer-motion';
 import { Node, Edge, Viewport, Position, NodeData, Side, PendingConnection } from '../../types';
 import { NodeShell } from './NodeShell';
@@ -20,8 +20,7 @@ interface GraphEngineProps {
 }
 
 // Helpers
-// @ts-ignore - The types for getDistance and getCenter are defined to accept PointerEvent
-// but Array.from(pointerCache.current.values()) may return unknown[], hence the explicit cast or ignore.
+// @ts-ignore
 const getDistance = (p1: PointerEvent, p2: PointerEvent) => {
   return Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY);
 };
@@ -63,13 +62,45 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
   const [mouseCanvasPos, setMouseCanvasPos] = useState<Position>({ x: 0, y: 0 });
 
   // Gesture State
-  const pointerCache = useRef<Map<number, PointerEvent>>(new Map()); // Changed to PointerEvent
+  const pointerCache = useRef<Map<number, PointerEvent>>(new Map());
   const prevPinchInfo = useRef<{ dist: number; center: Position } | null>(null);
   const lastPanPos = useRef<Position | null>(null);
   const isGestureActive = useRef(false);
   const gestureStartPos = useRef<Position | null>(null);
 
-  // Sync MotionValues when props change (e.g. undo/redo or initial load)
+  // Calculate flow depths for sequential animation
+  const { edgeDepths, maxDepth } = useMemo(() => {
+    const nodeDepths = new Map<string, number>();
+    nodes.forEach(n => nodeDepths.set(n.id, 0));
+
+    // Propagate depths (Bellman-Ford style relaxation to handle cycles gracefully)
+    // We limit iterations to nodes.length to avoid infinite loops in cycles
+    for (let i = 0; i < nodes.length + 1; i++) {
+        let changed = false;
+        edges.forEach(e => {
+            const sD = nodeDepths.get(e.source) || 0;
+            const tD = nodeDepths.get(e.target) || 0;
+            if (sD + 1 > tD) {
+                nodeDepths.set(e.target, sD + 1);
+                changed = true;
+            }
+        });
+        if (!changed) break;
+    }
+
+    const computedEdgeDepths = new Map<string, number>();
+    let max = 0;
+    edges.forEach(e => {
+        // Edge depth corresponds to the source node's depth
+        const depth = nodeDepths.get(e.source) || 0;
+        computedEdgeDepths.set(e.id, depth);
+        if (depth > max) max = depth;
+    });
+
+    return { edgeDepths: computedEdgeDepths, maxDepth: max };
+  }, [nodes, edges]);
+
+  // Sync MotionValues
   useEffect(() => {
     if (!isGestureActive.current) {
       viewX.set(viewport.x);
@@ -78,7 +109,6 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     }
   }, [viewport, viewX, viewY, viewZoom]);
 
-  // Sync Node MotionValues
   useEffect(() => {
     nodes.forEach(node => {
       let mvs = nodeMotionValues.current.get(node.id);
@@ -129,25 +159,22 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
 
   const handlePointerDown = (e: React.PointerEvent) => {
     (e.target as Element).setPointerCapture(e.pointerId);
-    pointerCache.current.set(e.pointerId, e.nativeEvent); // Store native event
+    pointerCache.current.set(e.pointerId, e.nativeEvent);
     
-    // Check if background tap
     if (e.target === containerRef.current) {
       gestureStartPos.current = { x: e.clientX, y: e.clientY };
     }
 
     if (pointerCache.current.size === 2) {
-      // Initialize Pinch
       const points = Array.from(pointerCache.current.values());
-      // Fix: Explicitly cast points to PointerEvent to resolve TypeScript error
+      // @ts-ignore
       prevPinchInfo.current = {
         dist: getDistance(points[0] as PointerEvent, points[1] as PointerEvent),
         center: getCenter(points[0] as PointerEvent, points[1] as PointerEvent)
       };
       isGestureActive.current = true;
-      lastPanPos.current = null; // Clear single finger pan
+      lastPanPos.current = null;
     } else if (pointerCache.current.size === 1) {
-      // Check Pan conditions
       const isTouch = e.pointerType === 'touch';
       const isPanTool = activeTool === 'pan';
       const isMiddleBtn = e.button === 1;
@@ -161,9 +188,8 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    pointerCache.current.set(e.pointerId, e.nativeEvent); // Store native event
+    pointerCache.current.set(e.pointerId, e.nativeEvent);
 
-    // Update Mouse Pos for Connection Line (projected to canvas)
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const currentViewport = { x: viewX.get(), y: viewY.get(), zoom: viewZoom.get() };
@@ -171,19 +197,16 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     }
 
     if (pointerCache.current.size === 2 && prevPinchInfo.current) {
-      // --- Handle Pinch Zoom ---
       const points = Array.from(pointerCache.current.values());
-      // Fix: Explicitly cast points to PointerEvent to resolve TypeScript error
+      // @ts-ignore
       const newDist = getDistance(points[0] as PointerEvent, points[1] as PointerEvent);
+      // @ts-ignore
       const newCenter = getCenter(points[0] as PointerEvent, points[1] as PointerEvent);
       
       const oldZoom = viewZoom.get();
       const zoomFactor = newDist / prevPinchInfo.current.dist;
       const newZoom = Math.min(Math.max(oldZoom * zoomFactor, 0.1), 5);
 
-      // Pan adjustment to zoom towards center
-      // Formula: NewPan = NewCenter - (PointUnderCursor * NewZoom)
-      // PointUnderCursor = (OldCenter - OldPan) / OldZoom
       const pointUnderCursorX = (prevPinchInfo.current.center.x - viewX.get()) / oldZoom;
       const pointUnderCursorY = (prevPinchInfo.current.center.y - viewY.get()) / oldZoom;
 
@@ -197,7 +220,6 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
       prevPinchInfo.current = { dist: newDist, center: newCenter };
 
     } else if (pointerCache.current.size === 1 && lastPanPos.current) {
-      // --- Handle Pan ---
       const dx = e.clientX - lastPanPos.current.x;
       const dy = e.clientY - lastPanPos.current.y;
 
@@ -212,14 +234,11 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     (e.target as Element).releasePointerCapture(e.pointerId);
     pointerCache.current.delete(e.pointerId);
 
-    // Reset Pinch if fingers lifted
     if (pointerCache.current.size < 2) {
       prevPinchInfo.current = null;
     }
     
-    // Reset Pan if all fingers lifted
     if (pointerCache.current.size === 0) {
-      // Check for Click (Tap) on background to deselect
       if (gestureStartPos.current) {
         const dist = Math.hypot(e.clientX - gestureStartPos.current.x, e.clientY - gestureStartPos.current.y);
         if (dist < 5 && e.target === containerRef.current) {
@@ -230,7 +249,6 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
 
       if (isGestureActive.current) {
         isGestureActive.current = false;
-        // Commit changes to React State
         onViewportChange({
           x: viewX.get(),
           y: viewY.get(),
@@ -240,13 +258,11 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
       lastPanPos.current = null;
       gestureStartPos.current = null;
     } else if (pointerCache.current.size === 1) {
-      // If we went from 2 fingers to 1, reset pan anchor to prevent jump
       const point = pointerCache.current.values().next().value;
       if (point) lastPanPos.current = { x: point.clientX, y: point.clientY };
     }
   };
 
-  // Legacy Wheel support (Desktop)
   const handleWheel = (e: React.WheelEvent) => {
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
@@ -254,13 +270,11 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
       const oldZoom = viewZoom.get();
       const newZoom = Math.min(Math.max(oldZoom - e.deltaY * zoomSensitivity, 0.1), 3);
       
-      // Calculate zoom center (mouse position)
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) {
           const mouseX = e.clientX - rect.left;
           const mouseY = e.clientY - rect.top;
           
-          // Point under mouse in canvas space
           const pointX = (mouseX - viewX.get()) / oldZoom;
           const pointY = (mouseY - viewY.get()) / oldZoom;
           
@@ -339,8 +353,8 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
   const getHandleOffset = (node: Node, side: Side, index: number) => {
     const width = node.width || 200; 
     const height = node.height || 100;
-    const gap = 12; // 12px = 4px * 3
-    const handleSize = 14; // 14px = 4px * 3.5
+    const gap = 12;
+    const handleSize = 14;
     const count = node.handles[side] || 0;
     const totalSpread = (count * handleSize) + ((count - 1) * gap);
     const startFromCenter = -totalSpread / 2 + handleSize / 2;
@@ -395,18 +409,18 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     },
     uiOverlay: {
       position: 'absolute' as const,
-      top: theme.space[6], // 24px
-      right: theme.space[6], // 24px
+      top: theme.space[6],
+      right: theme.space[6],
       pointerEvents: 'none' as const,
       textAlign: 'right' as const,
       zIndex: 50,
       display: 'flex',
       flexDirection: 'column' as const,
       alignItems: 'flex-end',
-      gap: theme.space[2], // 8px
+      gap: theme.space[2],
     },
     viewportInfo: {
-      background: `${theme.surface[2]}B3`, // 70% opacity
+      background: `${theme.surface[2]}B3`,
       padding: `${theme.space[1]} ${theme.space[2]}`,
       borderRadius: theme.radius[2],
       backdropFilter: 'blur(4px)',
@@ -425,7 +439,6 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
 
   return (
     <div style={styles.container}>
-       {/* Grid Background */}
        <motion.div 
         style={{
           ...styles.gridBackground,
@@ -477,6 +490,8 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
                     targetSide={edge.targetSide}
                     isConnectMode={activeTool === 'connect'}
                     isPanMode={activeTool === 'pan'}
+                    depth={edgeDepths.get(edge.id) || 0}
+                    maxDepth={maxDepth}
                     onDelete={(id) => {
                       if (readOnly) return;
                       onEdgesChange(edges.filter(e => e.id !== id));

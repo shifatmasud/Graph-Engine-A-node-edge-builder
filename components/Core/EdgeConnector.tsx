@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, MotionValue, useTransform, AnimatePresence } from 'framer-motion';
 import { getBezierPath, getBezierCenter } from '../../utils/geometry';
 import { Side } from '../../types';
@@ -16,6 +16,8 @@ interface EdgeConnectorProps {
   isConnectMode?: boolean;
   isPanMode?: boolean;
   onDelete?: (id: string) => void;
+  depth?: number;
+  maxDepth?: number;
 }
 
 export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
@@ -28,9 +30,18 @@ export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
   targetSide,
   isConnectMode,
   isPanMode = false,
-  onDelete
+  onDelete,
+  depth = 0,
+  maxDepth = 0
 }) => {
-  const { theme } = useTheme();
+  const { theme, mode } = useTheme();
+  
+  // Animation config
+  const PACKET_DURATION = 1.5;
+  const delay = depth * PACKET_DURATION;
+  // If maxDepth is 0 (single layer), we just loop continuously.
+  // If multiple layers, we wait for the full cycle of the graph to complete.
+  const repeatDelay = maxDepth > 0 ? (maxDepth * PACKET_DURATION) : 0;
 
   const meta = useTransform(
     [sourceNode.x, sourceNode.y, targetNode.x, targetNode.y],
@@ -50,20 +61,26 @@ export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
   const cy = useTransform(centerPos, c => c.y);
   
   const showFlow = true; 
+  
+  const neutralGlow = mode === 'dark' 
+    ? 'rgba(237, 237, 237, 0.25)' 
+    : 'rgba(34, 34, 34, 0.15)';
+
+  const unifiedStrokeWidth = '2px';
 
   const styles = {
     mainPath: {
       fill: 'none',
       strokeLinecap: 'round' as const,
       stroke: theme.content[3],
-      strokeWidth: '1.5px',
+      strokeWidth: unifiedStrokeWidth,
       strokeOpacity: 0.5,
     },
     flowPath: {
       fill: 'none',
       strokeLinecap: 'round' as const,
-      strokeWidth: '2.5px',
-      filter: `drop-shadow(0 0 4px ${theme.accent.glow})`,
+      strokeWidth: unifiedStrokeWidth,
+      filter: `drop-shadow(0 0 3px ${neutralGlow})`,
     }
   };
 
@@ -71,8 +88,8 @@ export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
     <g style={{ cursor: isPanMode ? 'grab' : 'default' }}>
        <defs>
         <linearGradient id={`grad-flow-${id}`} x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor={theme.accent.secondary} />
-          <stop offset="100%" stopColor={theme.accent.primary} />
+          <stop offset="0%" stopColor={theme.content[2]} />
+          <stop offset="100%" stopColor={theme.content[1]} />
         </linearGradient>
       </defs>
 
@@ -87,21 +104,24 @@ export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
         {showFlow && (
           <motion.path
             d={pathData}
+            pathLength={1} // Normalize path length for consistent timing regardless of edge pixel length
             style={{
               ...styles.flowPath,
-              strokeDasharray: '40 500',
+              // Dash array relative to pathLength=1. 0.2 is the packet size (20%), 2 is the gap.
+              strokeDasharray: '0.2 2', 
               stroke: `url(#grad-flow-${id})`,
+              opacity: 0.8
             }}
-          >
-            <animate
-              attributeName="stroke-dashoffset"
-              from="0"
-              to="-540"
-              dur="4s"
-              repeatCount="indefinite"
-              calcMode="linear"
-            />
-          </motion.path>
+            initial={{ strokeDashoffset: 0.2 }} // Start just "before" the path
+            animate={{ strokeDashoffset: -1 }} // End just "after" the path
+            transition={{
+              duration: PACKET_DURATION,
+              ease: "easeInOut",
+              delay: delay,
+              repeat: Infinity,
+              repeatDelay: repeatDelay
+            }}
+          />
         )}
       </AnimatePresence>
 
