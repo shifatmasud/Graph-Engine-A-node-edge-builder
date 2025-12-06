@@ -20,11 +20,14 @@ interface GraphEngineProps {
 }
 
 // Helpers
-const getDistance = (p1: React.PointerEvent, p2: React.PointerEvent) => {
+// @ts-ignore - The types for getDistance and getCenter are defined to accept PointerEvent
+// but Array.from(pointerCache.current.values()) may return unknown[], hence the explicit cast or ignore.
+const getDistance = (p1: PointerEvent, p2: PointerEvent) => {
   return Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY);
 };
 
-const getCenter = (p1: React.PointerEvent, p2: React.PointerEvent) => {
+// @ts-ignore
+const getCenter = (p1: PointerEvent, p2: PointerEvent) => {
   return {
     x: (p1.clientX + p2.clientX) / 2,
     y: (p1.clientY + p2.clientY) / 2,
@@ -56,12 +59,11 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
   const bgSize = useTransform(viewZoom, z => `${20 * z}px ${20 * z}px`);
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(null);
   const [mouseCanvasPos, setMouseCanvasPos] = useState<Position>({ x: 0, y: 0 });
 
   // Gesture State
-  const pointerCache = useRef<Map<number, React.PointerEvent>>(new Map());
+  const pointerCache = useRef<Map<number, PointerEvent>>(new Map()); // Changed to PointerEvent
   const prevPinchInfo = useRef<{ dist: number; center: Position } | null>(null);
   const lastPanPos = useRef<Position | null>(null);
   const isGestureActive = useRef(false);
@@ -113,26 +115,21 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
           nodeMotionValues.current.delete(selectedNodeId);
           setSelectedNodeId(null);
         }
-        if (selectedEdgeId) {
-          onEdgesChange(edges.filter(e => e.id !== selectedEdgeId));
-          setSelectedEdgeId(null);
-        }
       }
       if (e.key === 'Escape') {
         setPendingConnection(null);
         setSelectedNodeId(null);
-        setSelectedEdgeId(null);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedNodeId, selectedEdgeId, nodes, edges, onNodesChange, onEdgesChange, readOnly]);
+  }, [selectedNodeId, nodes, edges, onNodesChange, onEdgesChange, readOnly]);
 
   // --- Unified Pointer Handling (Touch + Mouse) ---
 
   const handlePointerDown = (e: React.PointerEvent) => {
     (e.target as Element).setPointerCapture(e.pointerId);
-    pointerCache.current.set(e.pointerId, e);
+    pointerCache.current.set(e.pointerId, e.nativeEvent); // Store native event
     
     // Check if background tap
     if (e.target === containerRef.current) {
@@ -142,9 +139,10 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     if (pointerCache.current.size === 2) {
       // Initialize Pinch
       const points = Array.from(pointerCache.current.values());
+      // Fix: Explicitly cast points to PointerEvent to resolve TypeScript error
       prevPinchInfo.current = {
-        dist: getDistance(points[0], points[1]),
-        center: getCenter(points[0], points[1])
+        dist: getDistance(points[0] as PointerEvent, points[1] as PointerEvent),
+        center: getCenter(points[0] as PointerEvent, points[1] as PointerEvent)
       };
       isGestureActive.current = true;
       lastPanPos.current = null; // Clear single finger pan
@@ -163,7 +161,7 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    pointerCache.current.set(e.pointerId, e);
+    pointerCache.current.set(e.pointerId, e.nativeEvent); // Store native event
 
     // Update Mouse Pos for Connection Line (projected to canvas)
     if (containerRef.current) {
@@ -175,8 +173,9 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     if (pointerCache.current.size === 2 && prevPinchInfo.current) {
       // --- Handle Pinch Zoom ---
       const points = Array.from(pointerCache.current.values());
-      const newDist = getDistance(points[0], points[1]);
-      const newCenter = getCenter(points[0], points[1]);
+      // Fix: Explicitly cast points to PointerEvent to resolve TypeScript error
+      const newDist = getDistance(points[0] as PointerEvent, points[1] as PointerEvent);
+      const newCenter = getCenter(points[0] as PointerEvent, points[1] as PointerEvent);
       
       const oldZoom = viewZoom.get();
       const zoomFactor = newDist / prevPinchInfo.current.dist;
@@ -225,7 +224,6 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
         const dist = Math.hypot(e.clientX - gestureStartPos.current.x, e.clientY - gestureStartPos.current.y);
         if (dist < 5 && e.target === containerRef.current) {
            setSelectedNodeId(null);
-           setSelectedEdgeId(null);
            setPendingConnection(null);
         }
       }
@@ -341,8 +339,8 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
   const getHandleOffset = (node: Node, side: Side, index: number) => {
     const width = node.width || 200; 
     const height = node.height || 100;
-    const gap = 12;
-    const handleSize = 14;
+    const gap = 12; // 12px = 4px * 3
+    const handleSize = 14; // 14px = 4px * 3.5
     const count = node.handles[side] || 0;
     const totalSpread = (count * handleSize) + ((count - 1) * gap);
     const startFromCenter = -totalSpread / 2 + handleSize / 2;
@@ -353,28 +351,92 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     return { x: width / 2 + offsetInGroup, y: height };
   };
 
-  const getCursorClass = () => {
-    if (activeTool === 'pan') return 'cursor-grab active:cursor-grabbing';
-    if (activeTool === 'connect') return 'cursor-crosshair';
-    return 'cursor-default';
+  const getCursorStyle = () => {
+    if (isGestureActive.current && lastPanPos.current) return 'grabbing';
+    if (activeTool === 'pan') return 'grab';
+    if (activeTool === 'connect') return 'crosshair';
+    return 'default';
+  };
+
+  const styles = {
+    container: {
+      width: '100%',
+      height: '100%',
+      position: 'relative' as const,
+      overflow: 'hidden',
+      touchAction: 'none' as const,
+    },
+    gridBackground: {
+      position: 'absolute' as const,
+      inset: 0,
+      pointerEvents: 'none' as const,
+      backgroundImage: `radial-gradient(${theme.grid} 1px, transparent 1px)`,
+    },
+    canvasTransform: {
+      width: '100%',
+      height: '100%',
+      originX: 0,
+      originY: 0,
+      willChange: 'transform',
+    },
+    svgLayer: {
+      overflow: 'visible' as const,
+      position: 'absolute' as const,
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: '100%',
+      pointerEvents: 'none' as const,
+      zIndex: 0,
+    },
+    nodeLayer: {
+      position: 'relative' as const,
+      zIndex: 10,
+    },
+    uiOverlay: {
+      position: 'absolute' as const,
+      top: theme.space[6], // 24px
+      right: theme.space[6], // 24px
+      pointerEvents: 'none' as const,
+      textAlign: 'right' as const,
+      zIndex: 50,
+      display: 'flex',
+      flexDirection: 'column' as const,
+      alignItems: 'flex-end',
+      gap: theme.space[2], // 8px
+    },
+    viewportInfo: {
+      background: `${theme.surface[2]}B3`, // 70% opacity
+      padding: `${theme.space[1]} ${theme.space[2]}`,
+      borderRadius: theme.radius[2],
+      backdropFilter: 'blur(4px)',
+    },
+    viewportText: {
+      fontFamily: '"Victor Mono", monospace',
+      fontSize: '12px',
+      color: theme.content[2],
+    },
+    pendingConnectionText: {
+      fontFamily: '"Victor Mono", monospace',
+      fontSize: '12px',
+      color: theme.accent.primary,
+    },
   };
 
   return (
-    <div className="w-full h-full relative overflow-hidden">
+    <div style={styles.container}>
        {/* Grid Background */}
        <motion.div 
-        className="absolute inset-0 pointer-events-none"
         style={{
-          backgroundImage: `radial-gradient(${theme.content[3]} 1px, transparent 1px)`,
+          ...styles.gridBackground,
           backgroundSize: bgSize,
           backgroundPosition: bgPosition,
-          opacity: 0.2
         }}
       />
 
       <div
         ref={containerRef}
-        className={`w-full h-full ${getCursorClass()}`}
+        style={{ ...styles.container, cursor: getCursorStyle() }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -382,22 +444,18 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
         onPointerLeave={handlePointerUp}
         onWheel={handleWheel}
         onContextMenu={e => e.preventDefault()}
-        style={{ touchAction: 'none' }}
       >
         <motion.div
-          className="w-full h-full origin-top-left"
           style={{
+            ...styles.canvasTransform,
             x: viewX,
             y: viewY,
             scale: viewZoom
           }}
         >
           {/* Edge Layer */}
-          <svg className="overflow-visible absolute top-0 left-0 w-full h-full pointer-events-none z-0">
-            {edges
-              .slice()
-              .sort((a, b) => (a.id === selectedEdgeId ? 1 : b.id === selectedEdgeId ? -1 : 0))
-              .map(edge => {
+          <svg style={styles.svgLayer}>
+            {edges.map(edge => {
                 const sourceNodeMVs = nodeMotionValues.current.get(edge.source);
                 const targetNodeMVs = nodeMotionValues.current.get(edge.target);
                 const sNode = nodes.find(n => n.id === edge.source);
@@ -417,18 +475,11 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
                     targetOffset={targetOffset}
                     sourceSide={edge.sourceSide}
                     targetSide={edge.targetSide}
-                    isSelected={selectedEdgeId === edge.id}
                     isConnectMode={activeTool === 'connect'}
                     isPanMode={activeTool === 'pan'}
-                    onSelect={(id) => {
-                      if (readOnly || activeTool !== 'select') return;
-                      setSelectedEdgeId(id);
-                      setSelectedNodeId(null);
-                    }}
                     onDelete={(id) => {
                       if (readOnly) return;
                       onEdgesChange(edges.filter(e => e.id !== id));
-                      if (selectedEdgeId === id) setSelectedEdgeId(null);
                     }}
                   />
                 );
@@ -443,7 +494,7 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
           </svg>
 
           {/* Node Layer */}
-          <div className="relative z-10">
+          <div style={styles.nodeLayer}>
             <AnimatePresence>
               {nodes.map(node => {
                  const mvs = nodeMotionValues.current.get(node.id);
@@ -466,7 +517,6 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
                     onSelect={(id) => {
                       if (activeTool === 'select') {
                         setSelectedNodeId(id);
-                        setSelectedEdgeId(null);
                       }
                     }}
                     onDimensionsChange={handleNodeResize}
@@ -481,15 +531,25 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
         </motion.div>
       </div>
 
-       <div className="absolute top-6 right-6 pointer-events-none text-right">
-        <div className="font-mono text-xs" style={{ color: theme.content[3] }}>
-          X: {viewport.x.toFixed(0)} Y: {viewport.y.toFixed(0)} Z: {viewport.zoom.toFixed(2)}
+       <div style={styles.uiOverlay}>
+        <div style={styles.viewportInfo}>
+          <div style={styles.viewportText}>
+            X: {viewport.x.toFixed(0)} Y: {viewport.y.toFixed(0)} Z: {viewport.zoom.toFixed(2)}
+          </div>
         </div>
-        {pendingConnection && (
-            <div className="mt-2 font-mono text-xs animate-pulse" style={{ color: theme.accent.primary }}>
-                Select target handle...
-            </div>
-        )}
+        <AnimatePresence>
+          {pendingConnection && (
+              <motion.div 
+                style={styles.pendingConnectionText}
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 5 }}
+                transition={{ duration: 0.2 }}
+              >
+                  Select target handle...
+              </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

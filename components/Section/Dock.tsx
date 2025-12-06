@@ -1,6 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import * as Icons from 'lucide-react';
+import {
+  MouseSimple,
+  Hand,
+  FlowArrow,
+  Plus,
+  GearSix,
+  SignIn,
+  Cpu,
+  SignOut,
+  Sun,
+  Moon,
+  UploadSimple,
+  DownloadSimple,
+  Code,
+  Target,
+  TrashSimple,
+  ArrowLeft
+} from '@phosphor-icons/react';
 import { NodeData } from '../../types';
 import { useTheme } from '../Core/ThemeContext';
 
@@ -15,154 +32,31 @@ interface DockProps {
   onCopyPseudo: () => void;
 }
 
-export const Dock: React.FC<DockProps> = ({ 
-  activeTool, 
-  onSelectTool, 
-  onAddNode, 
-  onClear, 
-  onResetView,
-  onImport,
-  onExport,
-  onCopyPseudo
-}) => {
-  const [activeMenu, setActiveMenu] = useState<'none' | 'add' | 'settings'>('none');
-  const { theme, toggle, mode } = useTheme();
-
-  const styles = {
-    dockContainer: {
-      position: 'fixed' as const,
-      bottom: '32px',
-      left: '50%',
-      transform: 'translateX(-50%)',
-      zIndex: 50,
-      display: 'flex',
-      flexDirection: 'column' as const,
-      alignItems: 'center',
-      gap: '12px',
-    },
-    bar: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      padding: '6px',
-      borderRadius: '24px',
-      background: mode === 'dark' ? 'rgba(9, 9, 11, 0.8)' : 'rgba(255, 255, 255, 0.8)',
-      backdropFilter: 'blur(16px)',
-      border: `1px solid ${theme.surface[3]}`,
-      boxShadow: theme.shadow,
-    },
-    divider: {
-      width: '1px',
-      height: '24px',
-      background: theme.surface[3],
-      margin: '0 4px',
-    },
-    floatingMenu: {
-      position: 'absolute' as const,
-      bottom: '100%',
-      marginBottom: '12px',
-      background: theme.surface[2],
-      border: `1px solid ${theme.surface[3]}`,
-      borderRadius: '16px',
-      padding: '4px',
-      display: 'flex',
-      flexDirection: 'column' as const,
-      gap: '4px',
-      boxShadow: theme.shadow,
-      overflow: 'hidden',
-      minWidth: '160px',
-    },
-  };
-
-  const toggleMenu = (menu: 'add' | 'settings') => {
-    setActiveMenu(prev => prev === menu ? 'none' : menu);
-  };
-
-  return (
-    <motion.div
-      initial={{ y: 100, opacity: 0, x: '-50%' }}
-      animate={{ y: 0, opacity: 1, x: '-50%' }}
-      transition={{ delay: 0.2, type: 'spring', stiffness: 200, damping: 20 }}
-      style={styles.dockContainer}
-    >
-      {/* Contextual Menus */}
-      <AnimatePresence>
-        {activeMenu === 'add' && (
-          <motion.div
-            style={styles.floatingMenu}
-            initial={{ opacity: 0, scale: 0.9, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 10 }}
-          >
-            <DockMenuItem icon={<Icons.LogIn size={16} color={theme.accent.primary} />} label="Input Node" onClick={() => { onAddNode('input'); setActiveMenu('none'); }} />
-            <DockMenuItem icon={<Icons.Cpu size={16} color="#a855f7" />} label="Process Node" onClick={() => { onAddNode('process'); setActiveMenu('none'); }} />
-            <DockMenuItem icon={<Icons.LogOut size={16} color={theme.accent.valid} />} label="Output Node" onClick={() => { onAddNode('output'); setActiveMenu('none'); }} />
-          </motion.div>
-        )}
-
-        {activeMenu === 'settings' && (
-          <motion.div
-            style={styles.floatingMenu}
-            initial={{ opacity: 0, scale: 0.9, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 10 }}
-          >
-             <DockMenuItem 
-              icon={mode === 'dark' ? <Icons.Sun size={16} /> : <Icons.Moon size={16} />} 
-              label={mode === 'dark' ? 'Light Mode' : 'Dark Mode'} 
-              onClick={() => { toggle(); setActiveMenu('none'); }} 
-            />
-             <div style={{ height: 1, background: theme.surface[3], margin: '4px 0' }} />
-            <DockMenuItem icon={<Icons.Upload size={16} />} label="Import JSON" onClick={() => { onImport(); setActiveMenu('none'); }} />
-            <DockMenuItem icon={<Icons.Download size={16} />} label="Export JSON" onClick={() => { onExport(); setActiveMenu('none'); }} />
-            <DockMenuItem icon={<Icons.Code size={16} />} label="Copy Pseudo Code" onClick={() => { onCopyPseudo(); setActiveMenu('none'); }} />
-             <div style={{ height: 1, background: theme.surface[3], margin: '4px 0' }} />
-             <DockMenuItem icon={<Icons.Focus size={16} />} label="Center View" onClick={() => { onResetView(); setActiveMenu('none'); }} />
-             <DockMenuItem icon={<Icons.Trash2 size={16} color={theme.accent.danger} />} label="Clear All" onClick={() => { onClear(); setActiveMenu('none'); }} />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Main Bar */}
-      <div style={styles.bar}>
-        <DockButton 
-          icon={<Icons.MousePointer2 size={18} />} 
-          isActive={activeTool === 'select'}
-          onClick={() => onSelectTool('select')}
-          label="Select"
-        />
-        <DockButton 
-          icon={<Icons.Hand size={18} />} 
-          isActive={activeTool === 'pan'}
-          onClick={() => onSelectTool('pan')}
-          label="Pan"
-        />
-        <DockButton 
-          icon={<Icons.Cable size={18} />} 
-          isActive={activeTool === 'connect'}
-          onClick={() => onSelectTool('connect')}
-          label="Connect"
-          activeColor={theme.accent.primary}
-        />
-        
-        <div style={styles.divider} />
-        
-        <DockButton 
-          icon={<Icons.Plus size={20} />} 
-          isActive={activeMenu === 'add'}
-          onClick={() => toggleMenu('add')}
-          label="Add"
-        />
-        <DockButton 
-          icon={<Icons.Settings2 size={20} />} 
-          isActive={activeMenu === 'settings'}
-          onClick={() => toggleMenu('settings')}
-          label="Settings"
-        />
-      </div>
-    </motion.div>
-  );
-};
+// Sub-components with State Layer Interaction
+const StateLayer = ({ isHovered, color, ripplePos }: { isHovered: boolean, color: string, ripplePos: {x: number, y: number} }) => (
+  <AnimatePresence>
+    {isHovered && (
+      <motion.div
+        style={{
+          position: 'absolute',
+          top: ripplePos.y,
+          left: ripplePos.x,
+          width: '1px',
+          height: '1px',
+          backgroundColor: color,
+          borderRadius: '50%',
+          transform: 'translate(-50%, -50%)',
+          pointerEvents: 'none',
+          opacity: 0.15,
+        }}
+        initial={{ scale: 0 }}
+        animate={{ scale: 100 }}
+        exit={{ scale: 0, opacity: 0 }}
+        transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
+      />
+    )}
+  </AnimatePresence>
+);
 
 const DockButton = ({ 
   icon, 
@@ -178,7 +72,19 @@ const DockButton = ({
   activeColor?: string;
 }) => {
   const { theme } = useTheme();
+  const [isHovered, setIsHovered] = useState(false);
+  const [ripplePos, setRipplePos] = useState({ x: 0, y: 0 });
+  const ref = useRef<HTMLButtonElement>(null);
+
+  const finalActiveColor = activeColor || theme.accent.primary;
   
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      setRipplePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    }
+  };
+
   const style = {
     button: {
       position: 'relative' as const,
@@ -187,67 +93,221 @@ const DockButton = ({
       justifyContent: 'center',
       width: '44px',
       height: '44px',
-      borderRadius: '16px',
+      borderRadius: '12px',
       border: 'none',
-      background: isActive ? theme.surface[3] : 'transparent',
-      color: isActive ? (activeColor || theme.content[1]) : theme.content[2],
+      background: isActive ? `${finalActiveColor}33` : 'transparent',
+      color: isActive ? finalActiveColor : theme.content[2],
       cursor: 'pointer',
-      transition: 'all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+      transition: 'all 0.2s ease',
       outline: 'none',
+      overflow: 'hidden',
     },
-    indicator: {
-      position: 'absolute' as const,
-      bottom: '6px',
-      width: '4px',
-      height: '4px',
-      borderRadius: '50%',
-      backgroundColor: activeColor || theme.accent.primary,
-    }
   };
 
   return (
     <motion.button
+      ref={ref}
       style={style.button}
       onClick={onClick}
-      whileTap={{ scale: 0.9 }}
-      whileHover={{ backgroundColor: isActive ? theme.surface[3] : theme.surface[2] }}
+      onPointerEnter={() => setIsHovered(true)}
+      onPointerLeave={() => setIsHovered(false)}
+      onPointerMove={handlePointerMove}
+      whileHover={{ scale: 1.05, color: isActive ? finalActiveColor : theme.content[1] }}
+      whileTap={{ scale: 0.95 }}
       aria-label={label}
     >
-      {icon}
-      {isActive && activeColor && <div style={style.indicator} />}
+      <StateLayer isHovered={isHovered} color={finalActiveColor} ripplePos={ripplePos} />
+      <div style={{ zIndex: 1 }}>{icon}</div>
     </motion.button>
   );
 };
 
-const DockMenuItem = ({ icon, label, onClick }: { icon: React.ReactNode, label: string, onClick: () => void }) => {
+const PanelItem = ({ icon, label, onClick, color }: { icon: React.ReactNode, label: string, onClick: () => void, color?: string }) => {
     const { theme } = useTheme();
+    const [isHovered, setIsHovered] = useState(false);
+    const [ripplePos, setRipplePos] = useState({ x: 0, y: 0 });
+    const ref = useRef<HTMLButtonElement>(null);
+    
+    const handlePointerMove = (e: React.PointerEvent) => {
+        if (ref.current) {
+            const rect = ref.current.getBoundingClientRect();
+            setRipplePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+        }
+    };
+    
   const style = {
     item: {
+      position: 'relative' as const,
       display: 'flex',
       alignItems: 'center',
-      gap: '12px',
-      padding: '10px 12px',
-      borderRadius: '8px',
+      gap: '8px',
+      padding: '0 12px',
+      height: '36px',
+      borderRadius: '10px',
       border: 'none',
       background: 'transparent',
-      color: theme.content[1],
-      fontSize: '14px',
+      color: color || theme.content[2],
+      fontSize: '13px',
+      fontWeight: 500,
       fontFamily: '"Inter", sans-serif',
       cursor: 'pointer',
-      width: '100%',
       textAlign: 'left' as const,
+      whiteSpace: 'nowrap' as const,
+      overflow: 'hidden',
     }
   };
 
   return (
     <motion.button
+      ref={ref}
       style={style.item}
       onClick={onClick}
-      whileHover={{ backgroundColor: theme.surface[3] }}
+      onPointerEnter={() => setIsHovered(true)}
+      onPointerLeave={() => setIsHovered(false)}
+      onPointerMove={handlePointerMove}
+      whileHover={{ color: color || theme.content[1] }}
       whileTap={{ scale: 0.98 }}
     >
-      {icon}
-      <span>{label}</span>
+      <StateLayer isHovered={isHovered} color={theme.content[1]} ripplePos={ripplePos} />
+      <div style={{ zIndex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {icon}
+          <span>{label}</span>
+      </div>
     </motion.button>
+  );
+};
+
+// Main Dock Component
+export const Dock: React.FC<DockProps> = (props) => {
+  const { activeTool, onSelectTool, onAddNode, onClear, onResetView, onImport, onExport, onCopyPseudo } = props;
+  const [view, setView] = useState<'main' | 'add' | 'settings'>('main');
+  const { theme, toggle, mode } = useTheme();
+
+  const styles = {
+    dockContainer: {
+      position: 'fixed' as const,
+      bottom: theme.space[6],
+      left: '50%',
+      transform: 'translateX(-50%)',
+      zIndex: 50,
+      display: 'flex',
+      alignItems: 'center',
+    },
+    bar: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: theme.space[1],
+      padding: '6px',
+      borderRadius: theme.radius.round,
+      background: theme.mode === 'dark' 
+        ? 'rgba(29, 29, 29, 0.6)'
+        : 'rgba(255, 255, 255, 0.6)',
+      backdropFilter: 'blur(12px) saturate(180%)',
+      border: `1px solid ${theme.border}`,
+      boxShadow: theme.shadow,
+    },
+    divider: {
+      width: '1px',
+      height: '24px',
+      background: theme.border,
+      margin: `0 4px`,
+    },
+    panelContainer: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '4px'
+    }
+  };
+
+  const panelTransition = { duration: 0.2, type: 'spring', stiffness: 400, damping: 25 };
+
+  const handleAddNode = (type: NodeData['type']) => {
+    onAddNode(type);
+    setView('main');
+  };
+
+  const handleSettingsAction = (action: () => void) => {
+    action();
+    setView('main');
+  };
+
+  const renderPanel = () => {
+    switch (view) {
+      case 'add':
+        return (
+          <motion.div
+            key="add"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={panelTransition}
+            style={styles.panelContainer}
+          >
+            <DockButton icon={<ArrowLeft size={20} />} onClick={() => setView('main')} label="Back" />
+            <div style={styles.divider} />
+            <PanelItem icon={<SignIn size={16} color={theme.accent.primary} />} label="Input" onClick={() => handleAddNode('input')} />
+            <PanelItem icon={<Cpu size={16} color={theme.accent.secondary} />} label="Process" onClick={() => handleAddNode('process')} />
+            <PanelItem icon={<SignOut size={16} color={theme.accent.valid} />} label="Output" onClick={() => handleAddNode('output')} />
+          </motion.div>
+        );
+      case 'settings':
+        return (
+          <motion.div
+            key="settings"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={panelTransition}
+            style={{...styles.panelContainer, gap: '2px'}}
+          >
+            <DockButton icon={<ArrowLeft size={20} />} onClick={() => setView('main')} label="Back" />
+            <div style={styles.divider} />
+            <PanelItem icon={mode === 'dark' ? <Sun size={16} /> : <Moon size={16} />} label={mode === 'dark' ? 'Light' : 'Dark'} onClick={() => handleSettingsAction(toggle)} />
+            <PanelItem icon={<UploadSimple size={16} />} label="Import" onClick={() => handleSettingsAction(onImport)} />
+            <PanelItem icon={<DownloadSimple size={16} />} label="Export" onClick={() => handleSettingsAction(onExport)} />
+            <PanelItem icon={<Code size={16} />} label="Pseudo" onClick={() => handleSettingsAction(onCopyPseudo)} />
+            <div style={styles.divider} />
+            <PanelItem icon={<Target size={16} />} label="Center" onClick={() => handleSettingsAction(onResetView)} />
+            <PanelItem icon={<TrashSimple size={16} />} label="Clear" onClick={() => handleSettingsAction(onClear)} color={theme.accent.danger} />
+          </motion.div>
+        );
+      case 'main':
+      default:
+        return (
+          <motion.div
+            key="main"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={panelTransition}
+            style={styles.panelContainer}
+          >
+            <DockButton icon={<MouseSimple size={20} weight={activeTool === 'select' ? "bold" : "regular"} />} isActive={activeTool === 'select'} onClick={() => onSelectTool('select')} label="Select" />
+            <DockButton icon={<Hand size={20} weight={activeTool === 'pan' ? "bold" : "regular"} />} isActive={activeTool === 'pan'} onClick={() => onSelectTool('pan')} label="Pan" />
+            <DockButton icon={<FlowArrow size={20} weight={activeTool === 'connect' ? "bold" : "regular"} />} isActive={activeTool === 'connect'} onClick={() => onSelectTool('connect')} label="Connect" activeColor={theme.accent.primary} />
+            <div style={styles.divider} />
+            <DockButton icon={<Plus size={20} />} onClick={() => setView('add')} label="Add Node" />
+            <DockButton icon={<GearSix size={20} />} onClick={() => setView('settings')} label="Settings" />
+          </motion.div>
+        );
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ y: 50, opacity: 0, x: '-50%' }}
+      animate={{ y: 0, opacity: 1, x: '-50%' }}
+      transition={{ delay: 0.1, type: 'spring', stiffness: 300, damping: 25 }}
+      style={styles.dockContainer}
+    >
+      <motion.div 
+        style={styles.bar} 
+        layout={{ duration: 0.3, type: 'spring', stiffness: 400, damping: 30 }}
+      >
+        <AnimatePresence mode="wait" initial={false}>
+          {renderPanel()}
+        </AnimatePresence>
+      </motion.div>
+    </motion.div>
   );
 };

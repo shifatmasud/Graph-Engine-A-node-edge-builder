@@ -3,9 +3,16 @@ import { FlowEditor } from './components/App/FlowEditor';
 import { ThemeProvider } from './components/Core/ThemeContext';
 
 const App = () => {
+  const styles = {
+    main: {
+      width: '100%',
+      height: '100%',
+    },
+  };
+
   return (
     <ThemeProvider>
-      <main className="w-full h-full">
+      <main style={styles.main}>
         <FlowEditor />
       </main>
     </ThemeProvider>

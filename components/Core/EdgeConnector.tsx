@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { motion, MotionValue, useTransform } from 'framer-motion';
-import { getBezierPath } from '../../utils/geometry';
+import React from 'react';
+import { motion, MotionValue, useTransform, AnimatePresence } from 'framer-motion';
+import { getBezierPath, getBezierCenter } from '../../utils/geometry';
 import { Side } from '../../types';
 import { useTheme } from './ThemeContext';
+import { X } from '@phosphor-icons/react';
 
 interface EdgeConnectorProps {
   id: string;
@@ -12,10 +13,8 @@ interface EdgeConnectorProps {
   targetOffset: { x: number; y: number };
   sourceSide: Side;
   targetSide: Side;
-  isSelected?: boolean;
   isConnectMode?: boolean;
   isPanMode?: boolean;
-  onSelect?: (id: string) => void;
   onDelete?: (id: string) => void;
 }
 
@@ -27,13 +26,10 @@ export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
   targetOffset,
   sourceSide,
   targetSide,
-  isSelected,
   isConnectMode,
   isPanMode = false,
-  onSelect,
-  onDelete,
+  onDelete
 }) => {
-  const [isHovered, setIsHovered] = useState(false);
   const { theme } = useTheme();
 
   const meta = useTransform(
@@ -43,126 +39,104 @@ export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
       const end = { x: (tx as number) + targetOffset.x, y: (ty as number) + targetOffset.y };
       
       const path = getBezierPath(start, end, sourceSide, targetSide);
-
-      const curvature = 50;
-      let cp1x = start.x, cp1y = start.y;
-      let cp2x = end.x, cp2y = end.y;
-
-      switch (sourceSide) {
-        case 'left': cp1x = start.x - curvature; break;
-        case 'right': cp1x = start.x + curvature; break;
-        case 'top': cp1y = start.y - curvature; break;
-        case 'bottom': cp1y = start.y + curvature; break;
-      }
-
-      switch (targetSide) {
-        case 'left': cp2x = end.x - curvature; break;
-        case 'right': cp2x = end.x + curvature; break;
-        case 'top': cp2y = end.y - curvature; break;
-        case 'bottom': cp2y = end.y + curvature; break;
-      }
-
-      const midX = 0.125 * start.x + 0.375 * cp1x + 0.375 * cp2x + 0.125 * end.x;
-      const midY = 0.125 * start.y + 0.375 * cp1y + 0.375 * cp2y + 0.125 * end.y;
-
-      return { path, midX, midY };
+      const center = getBezierCenter(start, end, sourceSide, targetSide);
+      return { path, center };
     }
   );
 
   const pathData = useTransform(meta, m => m.path);
-  const midX = useTransform(meta, m => m.midX);
-  const midY = useTransform(meta, m => m.midY);
+  const centerPos = useTransform(meta, m => m.center);
+  const cx = useTransform(centerPos, c => c.x);
+  const cy = useTransform(centerPos, c => c.y);
+  
+  const showFlow = true; 
+
+  const styles = {
+    mainPath: {
+      fill: 'none',
+      strokeLinecap: 'round' as const,
+      stroke: theme.content[3],
+      strokeWidth: '1.5px',
+      strokeOpacity: 0.6,
+    },
+    animatedCircle: {
+      fill: theme.accent.primary,
+    },
+  };
 
   return (
-    <g
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      onClick={(e) => {
-        if (!isPanMode) e.stopPropagation();
-        if (!isConnectMode) {
-          onSelect?.(id);
-        }
-      }}
-      onPointerDown={(e) => {
-        if (!isPanMode) e.stopPropagation();
-      }}
-      style={{ cursor: isConnectMode ? 'default' : (isPanMode ? 'grab' : 'pointer') }}
-    >
-      {/* Hit Area */}
-      <motion.path
-        d={pathData}
-        fill="none"
-        stroke="transparent"
-        strokeWidth={20}
-        style={{ pointerEvents: 'stroke' }}
-      />
-
-      {/* Selected / Danger Glow */}
-      <motion.path
-        d={pathData}
-        fill="none"
-        animate={{
-          stroke: isSelected ? theme.accent.glow : (isConnectMode && isHovered ? 'rgba(239, 68, 68, 0.3)' : 'transparent'),
-          strokeWidth: isSelected || (isConnectMode && isHovered) ? 8 : 0,
-        }}
-        transition={{ duration: 0.2 }}
-        strokeLinecap="round"
-      />
-
-      {/* Shadow */}
-      <motion.path
-        d={pathData}
-        fill="none"
-        stroke={theme.surface[1]}
-        strokeWidth={4}
-        strokeLinecap="round"
-        style={{ opacity: 0.5 }}
-      />
-
+    <g style={{ cursor: isPanMode ? 'grab' : 'default' }}>
       {/* Main Line */}
       <motion.path
         d={pathData}
-        fill="none"
-        initial={false}
-        animate={{
-          stroke: isSelected ? theme.accent.primary : (isConnectMode && isHovered ? theme.accent.danger : theme.content[3]),
-        }}
-        strokeWidth={2}
-        strokeLinecap="round"
+        style={styles.mainPath}
       />
+      
+      {/* Flow animation */}
+      <AnimatePresence>
+        {showFlow && (
+          <motion.circle
+            r={2.5}
+            style={styles.animatedCircle}
+          >
+            <motion.animateMotion
+              dur={"4s"} 
+              repeatCount="indefinite"
+              path={pathData}
+              calcMode="linear"
+            />
+          </motion.circle>
+        )}
+      </AnimatePresence>
 
-      {!isConnectMode && (
-        <motion.circle
-          r="2"
-          fill={isSelected ? theme.accent.primary : theme.content[2]}
-        >
-          <motion.animateMotion
-            dur="2s"
-            repeatCount="indefinite"
-            path={pathData}
-            calcMode="linear"
-          />
-        </motion.circle>
-      )}
-
-      {isConnectMode && (
-        <motion.g
-            style={{ x: midX, y: midY, pointerEvents: 'auto' }}
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            onClick={(e) => {
-                e.stopPropagation();
-                onDelete?.(id);
-            }}
-            whileHover={{ scale: 1.2 }}
-            whileTap={{ scale: 0.9 }}
-            cursor="pointer"
-        >
-            <circle r="10" fill={theme.surface[2]} stroke={theme.accent.danger} strokeWidth="1.5" />
-            <path d="M-3 -3 L3 3 M3 -3 L-3 3" stroke={theme.accent.danger} strokeWidth="1.5" strokeLinecap="round" />
-        </motion.g>
-      )}
+      {/* Delete Button (Only in Connect Mode) */}
+      <AnimatePresence>
+        {isConnectMode && (
+          <motion.g
+            initial={{ opacity: 0, scale: 0 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0 }}
+            transition={{ duration: 0.15 }}
+            style={{ translateX: cx, translateY: cy }}
+          >
+             <foreignObject x={-12} y={-12} width={24} height={24} style={{ overflow: 'visible', pointerEvents: 'all' }}>
+              <button 
+                style={{
+                  width: '24px', 
+                  height: '24px', 
+                  borderRadius: '50%', 
+                  background: theme.surface[1], 
+                  border: `1px solid ${theme.accent.danger}`, 
+                  color: theme.accent.danger,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: 0,
+                  transition: 'all 0.2s',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                }}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete?.(id);
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'scale(1.1)';
+                  e.currentTarget.style.background = theme.accent.danger;
+                  e.currentTarget.style.color = theme.content[1];
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'scale(1)';
+                  e.currentTarget.style.background = theme.surface[1];
+                  e.currentTarget.style.color = theme.accent.danger;
+                }}
+              >
+                 <X size={14} weight="bold" />
+              </button>
+            </foreignObject>
+          </motion.g>
+        )}
+      </AnimatePresence>
     </g>
   );
 };

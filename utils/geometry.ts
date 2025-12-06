@@ -1,3 +1,4 @@
+
 import { Position, Side } from '../types';
 
 /**
@@ -34,6 +35,51 @@ export const getBezierPath = (
   }
 
   return `M ${sx} ${sy} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${tx} ${ty}`;
+};
+
+/**
+ * Calculates the center point (t=0.5) of a Cubic Bezier curve.
+ */
+export const getBezierCenter = (
+  source: Position,
+  target: Position,
+  sourceSide: Side = 'right',
+  targetSide: Side = 'left',
+  curvature = 50
+): Position => {
+  const { x: sx, y: sy } = source;
+  const { x: tx, y: ty } = target;
+
+  let cp1x = sx, cp1y = sy;
+  let cp2x = tx, cp2y = ty;
+
+  switch (sourceSide) {
+    case 'left': cp1x = sx - curvature; break;
+    case 'right': cp1x = sx + curvature; break;
+    case 'top': cp1y = sy - curvature; break;
+    case 'bottom': cp1y = sy + curvature; break;
+  }
+
+  switch (targetSide) {
+    case 'left': cp2x = tx - curvature; break;
+    case 'right': cp2x = tx + curvature; break;
+    case 'top': cp2y = ty - curvature; break;
+    case 'bottom': cp2y = ty + curvature; break;
+  }
+
+  // Cubic Bezier at t=0.5
+  // B(t) = (1-t)^3 P0 + 3(1-t)^2 t P1 + 3(1-t) t^2 P2 + t^3 P3
+  const t = 0.5;
+  const mt = 1 - t;
+  const mt2 = mt * mt;
+  const mt3 = mt2 * mt;
+  const t2 = t * t;
+  const t3 = t2 * t;
+
+  const x = mt3 * sx + 3 * mt2 * t * cp1x + 3 * mt * t2 * cp2x + t3 * tx;
+  const y = mt3 * sy + 3 * mt2 * t * cp1y + 3 * mt * t2 * cp2y + t3 * ty;
+
+  return { x, y };
 };
 
 /**

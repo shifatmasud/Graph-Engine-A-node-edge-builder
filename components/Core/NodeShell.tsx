@@ -4,6 +4,8 @@ import { Handle } from './Handle';
 import { Side } from '../../types';
 import { useTheme } from './ThemeContext';
 
+const HANDLE_SIZE = 12;
+
 interface NodeShellProps {
   id: string;
   x: MotionValue<number>;
@@ -75,38 +77,43 @@ export const NodeShell: React.FC<NodeShellProps> = ({
 
   const renderHandleGroup = (side: Side, count: number) => {
     if (!count) return null;
-    return (
-      <div 
-        style={getHandleGroupStyle(side)}
-        className={`transition-opacity duration-300 ${showHandles ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-      >
-        {Array.from({ length: count }).map((_, i) => (
-          <Handle 
-            key={`${side}-${i}`}
-            side={side}
-            index={i} 
-            nodeId={id}
-            isConnecting={isConnecting}
-            onClick={onHandleClick}
-          />
-        ))}
-      </div>
-    );
+    
+    const handleOffset = `-${HANDLE_SIZE / 2}px`;
+    
+    const commonStyle = {
+      position: 'absolute' as const,
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: theme.space[3], 
+      zIndex: 20,
+      opacity: showHandles || isConnecting ? 1 : 0, 
+      pointerEvents: (showHandles || isConnecting) ? ('auto' as const) : ('none' as const),
+      transition: 'opacity 0.2s ease',
+    };
+
+    switch (side) {
+      case 'top': return { ...commonStyle, top: handleOffset, left: 0, right: 0, height: `${HANDLE_SIZE}px`, flexDirection: 'row' as const };
+      case 'bottom': return { ...commonStyle, bottom: handleOffset, left: 0, right: 0, height: `${HANDLE_SIZE}px`, flexDirection: 'row' as const };
+      case 'left': return { ...commonStyle, left: handleOffset, top: 0, bottom: 0, width: `${HANDLE_SIZE}px`, flexDirection: 'column' as const };
+      case 'right': return { ...commonStyle, right: handleOffset, top: 0, bottom: 0, width: `${HANDLE_SIZE}px`, flexDirection: 'column' as const };
+    }
   };
 
   const styles = {
     shell: {
       position: 'absolute' as const,
-      minWidth: '150px', 
+      minWidth: '150px',
       width: width || 'auto',
-      borderRadius: '12px',
-      background: theme.surface[1], // Use theme surface
-      backdropFilter: 'blur(12px)',
-      boxShadow: isSelected ? `0 20px 50px -10px ${theme.accent.glow}, 0 0 0 1px ${theme.accent.primary}` : theme.shadow,
+      borderRadius: theme.radius[4],
+      background: theme.surface[2],
+      boxShadow: isSelected 
+        ? `0 0 0 1.5px ${theme.accent.primary}, ${theme.shadow}`
+        : theme.shadow,
       border: `1px solid ${isSelected ? theme.accent.primary : theme.border}`,
       cursor: isDraggable ? 'grab' : (isPanMode ? 'grab' : 'default'),
       zIndex: isSelected ? 100 : 10,
-      transition: 'box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.3s ease',
+      transition: 'box-shadow 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.25s ease',
       display: 'flex',
       flexDirection: 'column' as const,
     },
@@ -114,10 +121,6 @@ export const NodeShell: React.FC<NodeShellProps> = ({
       position: 'relative' as const,
       zIndex: 2,
       width: '100%',
-      pointerEvents: 'none' as const, 
-    },
-    contentInner: {
-      pointerEvents: 'auto' as const,
     }
   };
 
@@ -136,37 +139,61 @@ export const NodeShell: React.FC<NodeShellProps> = ({
       }}
       initial={{ scale: 0.9, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
-      whileTap={isDraggable ? { cursor: 'grabbing', scale: 1.02 } : {}}
-      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+      whileTap={isDraggable ? { cursor: 'grabbing', scale: 1.01 } : {}}
+      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
     >
-      {renderHandleGroup('top', handles.top || 0)}
-      {renderHandleGroup('right', handles.right || 0)}
-      {renderHandleGroup('bottom', handles.bottom || 0)}
-      {renderHandleGroup('left', handles.left || 0)}
+      <div style={renderHandleGroup('top', handles.top || 0)}>
+        {Array.from({ length: handles.top || 0 }).map((_, i) => (
+          <Handle 
+            key={`top-${i}`}
+            side={'top'}
+            index={i} 
+            nodeId={id}
+            isConnecting={isConnecting}
+            onClick={onHandleClick}
+          />
+        ))}
+      </div>
+      <div style={renderHandleGroup('right', handles.right || 0)}>
+        {Array.from({ length: handles.right || 0 }).map((_, i) => (
+          <Handle 
+            key={`right-${i}`}
+            side={'right'}
+            index={i} 
+            nodeId={id}
+            isConnecting={isConnecting}
+            onClick={onHandleClick}
+          />
+        ))}
+      </div>
+      <div style={renderHandleGroup('bottom', handles.bottom || 0)}>
+        {Array.from({ length: handles.bottom || 0 }).map((_, i) => (
+          <Handle 
+            key={`bottom-${i}`}
+            side={'bottom'}
+            index={i} 
+            nodeId={id}
+            isConnecting={isConnecting}
+            onClick={onHandleClick}
+          />
+        ))}
+      </div>
+      <div style={renderHandleGroup('left', handles.left || 0)}>
+        {Array.from({ length: handles.left || 0 }).map((_, i) => (
+          <Handle 
+            key={`left-${i}`}
+            side={'left'}
+            index={i} 
+            nodeId={id}
+            isConnecting={isConnecting}
+            onClick={onHandleClick}
+          />
+        ))}
+      </div>
 
       <div style={styles.contentArea}>
-        <div style={styles.contentInner}>
-          {children}
-        </div>
+        {children}
       </div>
     </motion.div>
   );
-};
-
-const getHandleGroupStyle = (side: Side): React.CSSProperties => {
-  const common = {
-    position: 'absolute' as const,
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: '12px',
-    zIndex: 20,
-  };
-
-  switch (side) {
-    case 'top': return { ...common, top: '-7px', left: 0, right: 0, height: '14px', flexDirection: 'row' };
-    case 'bottom': return { ...common, bottom: '-7px', left: 0, right: 0, height: '14px', flexDirection: 'row' };
-    case 'left': return { ...common, left: '-7px', top: 0, bottom: 0, width: '14px', flexDirection: 'column' };
-    case 'right': return { ...common, right: '-7px', top: 0, bottom: 0, width: '14px', flexDirection: 'column' };
-  }
 };

@@ -1,6 +1,7 @@
 import React from 'react';
 import { getBezierPath } from '../../utils/geometry';
 import { Position } from '../../types';
+import { useTheme } from './ThemeContext';
 
 interface ConnectionLineProps {
   sourcePos: Position;
@@ -9,41 +10,55 @@ interface ConnectionLineProps {
 }
 
 export const ConnectionLine: React.FC<ConnectionLineProps> = ({ sourcePos, targetPos, isTemp }) => {
+  const { theme } = useTheme();
   const pathData = getBezierPath(sourcePos, targetPos);
 
+  const styles = {
+    glowPath: {
+      fill: 'none',
+      stroke: theme.accent.primary,
+      strokeWidth: '4px',
+      strokeLinecap: 'round' as const,
+      opacity: 0.3,
+    },
+    mainPath: {
+      fill: 'none',
+      stroke: theme.accent.primary,
+      strokeWidth: '1.5px',
+      strokeDasharray: isTemp ? "5,5" : "none",
+      transition: 'stroke 0.3s ease',
+    },
+    terminatorDot: {
+      fill: theme.accent.primary,
+      filter: `drop-shadow(0 0 3px ${theme.accent.glow})`,
+    }
+  };
+
   return (
-    <g className="pointer-events-none">
-      {/* Shadow/Outline for visibility on dark backgrounds */}
+    <g style={{ pointerEvents: 'none' }}>
+      {/* Glow effect */}
       <path
         d={pathData}
-        fill="none"
-        stroke="#09090b"
-        strokeWidth={4}
-        strokeLinecap="round"
-        className="opacity-50"
+        style={styles.glowPath}
       />
       {/* Main Line */}
       <path
         d={pathData}
-        fill="none"
-        stroke={isTemp ? "#3b82f6" : "#52525b"}
-        strokeWidth={2}
-        strokeDasharray={isTemp ? "5,5" : "none"}
-        className="transition-colors duration-300"
+        style={styles.mainPath}
       >
         {isTemp && (
           <animate 
             attributeName="stroke-dashoffset" 
             from="100" 
             to="0" 
-            dur="1s" 
+            dur="2s" 
             repeatCount="indefinite" 
           />
         )}
       </path>
       {/* Terminator dot for temp connections */}
       {isTemp && (
-        <circle cx={targetPos.x} cy={targetPos.y} r={3} fill="#3b82f6" />
+        <circle cx={targetPos.x} cy={targetPos.y} r={4} style={styles.terminatorDot} />
       )}
     </g>
   );

@@ -1,8 +1,20 @@
 import React, { memo, useState, useRef, useEffect } from 'react';
-import * as Icons from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { NodeData } from '../../types';
 import { useTheme } from './ThemeContext';
+import {
+  SignIn,
+  SignOut,
+  Cpu,
+  Pulse,
+  Gear,
+  Bug,
+  DownloadSimple,
+  PencilSimple,
+  TrashSimple,
+  Check,
+  DotsThree,
+} from '@phosphor-icons/react';
+import { NodeData } from '../../types';
 
 interface IPOSlateProps {
   data: NodeData;
@@ -11,12 +23,12 @@ interface IPOSlateProps {
 }
 
 const getNodeIcon = (type: string, color: string) => {
-  const style = { width: 16, height: 16, color };
+  const style = { width: 14, height: 14, color, opacity: 0.8 };
   switch (type) {
-    case 'input': return <Icons.LogIn style={style} />;
-    case 'output': return <Icons.LogOut style={style} />;
-    case 'process': return <Icons.Cpu style={style} />;
-    default: return <Icons.Activity style={style} />;
+    case 'input': return <SignIn style={style} weight="bold" />;
+    case 'output': return <SignOut style={style} weight="bold" />;
+    case 'process': return <Cpu style={style} weight="bold" />;
+    default: return <Pulse style={style} weight="bold" />;
   }
 };
 
@@ -24,12 +36,21 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
   const { theme } = useTheme();
   const [isEditing, setIsEditing] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const [editValues, setEditValues] = useState({ label: data.label, value: data.value });
   const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
+    if (isEditing) {
+        if (inputRef.current) {
+            inputRef.current.focus();
+        }
+        if (textareaRef.current) {
+            const ta = textareaRef.current;
+            ta.style.height = 'auto'; // Reset height
+            ta.style.height = `${ta.scrollHeight}px`; // Set to scroll height
+        }
     }
   }, [isEditing]);
 
@@ -43,31 +64,12 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
     }
   };
 
-  const handleCopyPseudo = () => {
-    const pseudo = `// ${data.type.toUpperCase()} NODE\n${data.label} = ${data.value || 'null'};`;
-    navigator.clipboard.writeText(pseudo);
-    setShowMenu(false);
-  };
-
   const getNodeSpecificActions = () => {
     switch(data.type) {
-      case 'input':
-        return [
-          { label: 'Configure Source', icon: <Icons.Settings size={12} /> },
-          { label: 'Toggle Stream', icon: <Icons.Activity size={12} /> }
-        ];
-      case 'process':
-        return [
-          { label: 'Debug Mode', icon: <Icons.Bug size={12} /> },
-          { label: 'View Logs', icon: <Icons.FileText size={12} /> }
-        ];
-      case 'output':
-        return [
-          { label: 'Export Data', icon: <Icons.Download size={12} /> },
-          { label: 'Format Settings', icon: <Icons.Sliders size={12} /> }
-        ];
-      default:
-        return [];
+      case 'input': return [ { label: 'Source Config', icon: <Gear size={12} /> } ];
+      case 'process': return [ { label: 'Debug', icon: <Bug size={12} /> } ];
+      case 'output': return [ { label: 'Export', icon: <DownloadSimple size={12} /> } ];
+      default: return [];
     }
   };
 
@@ -76,64 +78,65 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
       display: 'flex',
       flexDirection: 'column' as const,
       width: '100%',
-      padding: '0', 
     },
     header: {
-      padding: '12px 16px',
-      borderBottom: `1px solid ${theme.border}`,
+      padding: '12px 14px 8px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      gap: '12px',
-      background: theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
-      borderTopLeftRadius: '12px',
-      borderTopRightRadius: '12px',
-      position: 'relative' as const,
+      gap: '10px',
     },
     titleGroup: {
       display: 'flex',
       alignItems: 'center',
       gap: '8px',
       flex: 1,
+      overflow: 'hidden',
     },
     headerText: {
-      fontSize: '14px',
+      fontSize: '16px',
       fontWeight: 400,
       fontFamily: '"Bebas Neue", cursive',
       color: theme.content[1],
       letterSpacing: '0.05em',
-      transform: 'translateY(1px)',
+      textTransform: 'uppercase' as const,
+      whiteSpace: 'nowrap' as const,
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      transform: 'translateY(1px)', 
     },
     body: {
-      padding: '16px',
+      padding: '0 14px 14px',
       display: 'flex',
       flexDirection: 'column' as const,
       gap: '8px',
-      minHeight: '60px',
     },
-    label: {
+    valueDisplay: {
       fontSize: '12px',
-      fontFamily: '"Inter", sans-serif',
-      color: theme.content[2],
-      lineHeight: '1.4',
-    },
-    typeTag: {
-      fontSize: '10px',
       fontFamily: '"Victor Mono", monospace',
-      color: theme.content[3],
-      textTransform: 'uppercase' as const,
-      alignSelf: 'flex-start',
+      color: theme.content[2],
+      background: theme.surface[1], // Cutout effect
+      padding: '8px 10px',
+      borderRadius: theme.radius[2],
+      border: '1px solid transparent',
+      minHeight: '32px',
+      display: 'flex',
+      alignItems: 'center',
+      whiteSpace: 'pre-wrap' as const,
+      wordBreak: 'break-word' as const,
     },
     input: {
-      background: 'transparent',
+      background: theme.surface[1],
       border: `1px solid ${theme.accent.primary}`,
       color: theme.content[1],
-      borderRadius: '4px',
-      padding: '2px 4px',
+      borderRadius: theme.radius[2],
+      padding: '7px 9px',
       width: '100%',
       fontSize: '12px',
-      fontFamily: 'inherit',
+      fontFamily: '"Victor Mono", monospace',
       outline: 'none',
+      resize: 'none' as const,
+      overflow: 'hidden',
     },
     headerInput: {
       background: 'transparent',
@@ -141,33 +144,36 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
       borderBottom: `1px solid ${theme.accent.primary}`,
       color: theme.content[1],
       width: '100%',
-      fontSize: '14px',
+      fontSize: '16px',
       fontFamily: '"Bebas Neue", cursive',
       letterSpacing: '0.05em',
       outline: 'none',
+      padding: 0,
     },
     iconBtn: {
       background: 'transparent',
       border: 'none',
       cursor: 'pointer',
       color: theme.content[3],
-      padding: 4,
-      borderRadius: 4,
+      padding: '4px',
+      borderRadius: '4px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
+      opacity: isHovered || showMenu ? 1 : 0, // Only show on hover for minimal noise
+      transition: 'opacity 0.2s, color 0.2s',
     },
     dropdown: {
       position: 'absolute' as const,
-      top: 'calc(100% - 8px)',
+      top: '36px',
       right: '8px',
       background: theme.surface[2],
       border: `1px solid ${theme.border}`,
-      borderRadius: '8px',
+      borderRadius: theme.radius[3],
       padding: '4px',
-      minWidth: '140px',
+      minWidth: '120px',
       boxShadow: theme.shadow,
-      zIndex: 50,
+      zIndex: 60,
       display: 'flex',
       flexDirection: 'column' as const,
       gap: '2px',
@@ -180,36 +186,34 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
       border: 'none',
       background: 'transparent',
       color: theme.content[1],
-      fontSize: '12px',
+      fontSize: '11px',
       fontFamily: '"Inter", sans-serif',
       cursor: 'pointer',
-      borderRadius: '4px',
+      borderRadius: theme.radius[1],
       textAlign: 'left' as const,
       width: '100%',
-    },
-    separator: {
-      height: '1px',
-      background: theme.border,
-      margin: '2px 0',
-      width: '100%'
     }
   };
 
-  const iconColor = data.type === 'input' ? theme.accent.primary 
+  const iconColor = data.type === 'input' ? theme.accent.primary
                   : data.type === 'output' ? theme.accent.valid 
-                  : '#a855f7'; // Purple for process
+                  : theme.accent.secondary;
 
   return (
-    <div style={styles.wrapper}>
+    <div 
+      style={styles.wrapper}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       {/* Context Menu Backdrop */}
       {showMenu && (
         <div 
-          style={{ position: 'fixed', inset: 0, zIndex: 40 }} 
-          onClick={() => setShowMenu(false)} 
+          style={{ position: 'fixed', inset: 0, zIndex: 55 }} 
+          onClick={(e) => { e.stopPropagation(); setShowMenu(false); }} 
         />
       )}
 
-      <div style={styles.header} onDoubleClick={() => setIsEditing(true)}>
+      <div style={styles.header}>
         <div style={styles.titleGroup}>
           {getNodeIcon(data.type, iconColor)}
           {isEditing ? (
@@ -221,7 +225,7 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
               onKeyDown={(e) => e.key === 'Enter' && handleSave()}
             />
           ) : (
-            <span style={styles.headerText}>{data.label}</span>
+            <span style={styles.headerText} title={data.label}>{data.label}</span>
           )}
         </div>
         
@@ -229,7 +233,7 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
           style={styles.iconBtn} 
           onClick={(e) => { e.stopPropagation(); isEditing ? handleSave() : setShowMenu(!showMenu); }}
         >
-          {isEditing ? <Icons.Check size={14} color={theme.accent.valid} /> : <Icons.MoreHorizontal size={14} />}
+          {isEditing ? <Check size={14} color={theme.accent.valid} weight="bold" /> : <DotsThree size={18} weight="bold" />}
         </button>
 
         <AnimatePresence>
@@ -245,57 +249,44 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
                  <button 
                   key={idx}
                   style={styles.menuItem}
-                  onMouseEnter={(e) => e.currentTarget.style.background = theme.surface[3]}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowMenu(false);
                   }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.surface[3]}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                 >
                   {action.icon}
                   {action.label}
                 </button>
               ))}
 
-              <div style={styles.separator} />
+              <div style={{ height: 1, background: theme.border, margin: '2px 0' }} />
 
               <button 
                 style={styles.menuItem}
-                onMouseEnter={(e) => e.currentTarget.style.background = theme.surface[3]}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleCopyPseudo();
-                }}
-              >
-                <Icons.Code size={12} />
-                Copy Pseudo Code
-              </button>
-
-              <button 
-                style={styles.menuItem}
-                onMouseEnter={(e) => e.currentTarget.style.background = theme.surface[3]}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowMenu(false);
                   setIsEditing(true);
                 }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.surface[3]}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
               >
-                <Icons.Edit2 size={12} />
+                <PencilSimple size={12} />
                 Rename
               </button>
               <button 
                 style={{ ...styles.menuItem, color: theme.accent.danger }}
-                onMouseEnter={(e) => e.currentTarget.style.background = theme.surface[3]}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowMenu(false);
                   onDelete?.();
                 }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.surface[3]}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
               >
-                <Icons.Trash size={12} color={theme.accent.danger} />
+                <TrashSimple size={12} color={theme.accent.danger} />
                 Delete
               </button>
             </motion.div>
@@ -305,21 +296,31 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
 
       <div style={styles.body}>
         {isEditing ? (
-           <input
-             style={styles.input}
-             value={editValues.value ?? ''}
-             onChange={(e) => setEditValues(prev => ({...prev, value: e.target.value}))}
-             placeholder="Enter value..."
-             onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-           />
+             <textarea
+                ref={textareaRef}
+                style={styles.input}
+                value={editValues.value ?? ''}
+                onChange={(e) => {
+                    setEditValues(prev => ({...prev, value: e.target.value}));
+                    // Auto-resize on change
+                    const ta = e.currentTarget;
+                    ta.style.height = 'auto';
+                    ta.style.height = `${ta.scrollHeight}px`;
+                }}
+                placeholder="No Data"
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSave();
+                    }
+                }}
+                rows={1}
+            />
         ) : (
-          <span style={styles.label}>
-            {(data.value !== undefined && data.value !== '') ? data.value : 'Configure node parameters...'}
-          </span>
+        <div style={styles.valueDisplay}>
+            {(data.value !== undefined && data.value !== '') ? data.value : <span style={{ opacity: 0.3, fontStyle: 'italic' }}>null</span>}
+        </div>
         )}
-        <span style={styles.typeTag}>
-          #{data.type}
-        </span>
       </div>
     </div>
   );

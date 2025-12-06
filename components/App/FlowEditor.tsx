@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Node, Edge, Viewport, NodeData, Position } from '../../types';
 import { IPOSlate } from '../Core/NodeBlock'; 
-import { Dock } from '../Section/Dock';
 import { ContextMenu } from '../Section/ContextMenu';
 import { GraphEngine } from '../Core/GraphEngine';
 import { screenToCanvas, generateId } from '../../utils/geometry';
@@ -66,10 +65,11 @@ export const FlowEditor: React.FC = () => {
     const targetX = screenPos ? screenPos.x : window.innerWidth / 2;
     const targetY = screenPos ? screenPos.y : window.innerHeight / 2;
 
+    const containerRect = containerRef.current?.getBoundingClientRect();
     const pos = screenToCanvas(
          { x: targetX, y: targetY },
          viewport,
-         { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight } as DOMRect
+         containerRect || { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight } as DOMRect
     );
 
     const handles: Node['handles'] = { top: 1, right: 1, bottom: 1, left: 1 };
@@ -119,9 +119,7 @@ export const FlowEditor: React.FC = () => {
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (activeTool === 'select') {
-        setContextMenuPos({ x: e.clientX, y: e.clientY });
-    }
+    setContextMenuPos({ x: e.clientX, y: e.clientY });
   };
 
   const handleContextAction = (action: string, payload?: any) => {
@@ -134,6 +132,12 @@ export const FlowEditor: React.FC = () => {
         setEdges([]);
     } else if (action === 'copy_pseudo') {
         handleCopyGlobalPseudo();
+    } else if (action === 'select_tool') {
+        setActiveTool(payload);
+    } else if (action === 'import') {
+        triggerImport();
+    } else if (action === 'export') {
+        exportProject();
     }
   };
 
@@ -171,11 +175,53 @@ export const FlowEditor: React.FC = () => {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const styles = {
+    container: {
+      width: '100%',
+      height: '100vh', // Full viewport height
+      fontFamily: 'Inter, sans-serif',
+      position: 'relative' as const,
+      overflow: 'hidden',
+      backgroundColor: theme.surface[1],
+      color: theme.content[1],
+      transition: 'background-color 0.3s ease, color 0.3s ease',
+      WebkitTouchCallout: 'none', // Disable context menu on long press for iOS Safari
+      WebkitUserSelect: 'none', // Disable text selection for iOS Safari
+      KhtmlUserSelect: 'none', // Disable text selection for Konqueror
+      MozUserSelect: 'none', // Disable text selection for Firefox
+      MsUserSelect: 'none', // Disable text selection for Edge/IE
+      userSelect: 'none', // Disable text selection for general browsers
+    },
+    uiOverlay: {
+      position: 'absolute' as const,
+      top: theme.space[6], // 24px
+      left: theme.space[6], // 24px
+      pointerEvents: 'none' as const,
+      zIndex: 50,
+    },
+    title: {
+      fontSize: '28px',
+      fontFamily: '"Bebas Neue", cursive',
+      letterSpacing: '0.05em',
+      opacity: 0.9,
+      color: theme.content[1],
+      textShadow: `0 0 10px ${theme.accent.glow}`,
+    },
+    subtitle: {
+      fontFamily: '"Victor Mono", monospace',
+      fontSize: '11px',
+      marginTop: theme.space[1], // 4px
+      letterSpacing: '0.05em',
+      color: theme.accent.primary,
+      opacity: 0.8,
+    }
+  };
+
+
   return (
     <div 
         ref={containerRef}
-        className="w-full h-screen font-body selection:bg-accent/30 relative transition-colors duration-300"
-        style={{ backgroundColor: theme.surface[1], color: theme.content[1] }}
+        style={styles.container}
         onContextMenu={handleContextMenu}
     >
       <input 
@@ -205,26 +251,14 @@ export const FlowEditor: React.FC = () => {
       />
 
       {/* UI Overlay */}
-      <div className="absolute top-6 left-6 pointer-events-none z-50">
+      <div style={styles.uiOverlay}>
         <h1 
-            className="text-4xl font-display tracking-wider opacity-90 drop-shadow-lg"
-            style={{ color: theme.content[1] }}
+            style={styles.title}
         >Nexus Flow</h1>
-        <p className="font-mono text-xs mt-1 tracking-tight" style={{ color: theme.accent.primary }}>
-            v3.5 // Mode: {activeTool.toUpperCase()}
+        <p style={styles.subtitle}>
+            v4.0 // {activeTool.toUpperCase()}
         </p>
       </div>
-
-      <Dock 
-        activeTool={activeTool}
-        onSelectTool={setActiveTool}
-        onAddNode={(type) => handleAddNode(type)} 
-        onClear={() => { setNodes([]); setEdges([]); }}
-        onResetView={() => setViewport({ x: 0, y: 0, zoom: 1 })}
-        onImport={triggerImport}
-        onExport={exportProject}
-        onCopyPseudo={handleCopyGlobalPseudo}
-      />
 
       <ContextMenu 
         position={contextMenuPos} 
