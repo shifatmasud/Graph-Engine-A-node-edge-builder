@@ -1,7 +1,9 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Node, Edge, Viewport, NodeData, Position } from '../../types';
 import { IPOSlate } from '../Core/NodeBlock'; 
 import { ContextMenu } from '../Section/ContextMenu';
+import { Dock } from '../Section/Dock';
 import { GraphEngine } from '../Core/GraphEngine';
 import { screenToCanvas, generateId } from '../../utils/geometry';
 import { useTheme } from '../Core/ThemeContext';
@@ -259,6 +261,17 @@ export const FlowEditor: React.FC = () => {
             v4.0 // {activeTool.toUpperCase()}
         </p>
       </div>
+
+      <Dock 
+        activeTool={activeTool}
+        onSelectTool={setActiveTool}
+        onAddNode={handleAddNode}
+        onClear={() => { setNodes([]); setEdges([]); }}
+        onResetView={() => setViewport({ x: 0, y: 0, zoom: 1 })}
+        onImport={triggerImport}
+        onExport={exportProject}
+        onCopyPseudo={handleCopyGlobalPseudo}
+      />
 
       <ContextMenu 
         position={contextMenuPos} 
