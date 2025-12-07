@@ -7,8 +7,10 @@ interface HandleProps {
   index: number;
   nodeId: string;
   isConnected?: boolean;
-  isConnecting?: boolean; 
-  onClick?: (e: React.MouseEvent, nodeId: string, index: number, side: Side) => void;
+  isConnecting?: boolean;
+  isPotentialTarget?: boolean;
+  onPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void;
+  // REMOVED: onPointerEnter and onPointerLeave are no longer needed
 }
 
 export const Handle: React.FC<HandleProps> = ({
@@ -17,34 +19,55 @@ export const Handle: React.FC<HandleProps> = ({
   nodeId,
   isConnected,
   isConnecting,
-  onClick
+  isPotentialTarget,
+  onPointerDown,
 }) => {
   const { theme } = useTheme();
+
+  const isTarget = isPotentialTarget && isConnecting;
 
   const dotColor = isConnected 
     ? theme.accent.primary 
     : theme.content[3];
   
-  const borderColor = isConnected 
-    ? theme.accent.primary 
-    : theme.border;
+  const borderColor = isTarget
+    ? theme.accent.secondary
+    : isConnected 
+      ? theme.accent.primary 
+      : theme.border;
+
+  const visualSize = 12;
+  const hitAreaSize = 80; // Large hit area for easy interaction
+  const margin = (hitAreaSize - visualSize) / 2;
 
   const styles = {
-    wrapper: {
+    hitArea: {
       position: 'relative' as const,
-      width: '12px',
-      height: '12px',
+      width: `${hitAreaSize}px`,
+      height: `${hitAreaSize}px`,
       borderRadius: '50%',
-      backgroundColor: theme.surface[2], // Use node surface color
-      border: `1.5px solid ${borderColor}`,
+      // Use negative margin to increase hit area without affecting layout spacing
+      margin: `-${margin}px`,
       cursor: isConnecting ? 'crosshair' : 'pointer',
       zIndex: 50,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       pointerEvents: 'auto' as const,
+    },
+    visual: {
+      width: `${visualSize}px`,
+      height: `${visualSize}px`,
+      borderRadius: '50%',
+      backgroundColor: theme.surface[2], // Use node surface color
+      border: `1.5px solid ${borderColor}`,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      pointerEvents: 'none' as const, // Clicks are captured by parent hitArea
       boxShadow: `0 0 0 2px ${theme.surface[1]}`, // Separator from node edge, using canvas color
-      transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
+      transform: isTarget ? 'scale(1.4)' : 'scale(1)',
+      transition: 'all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)',
     },
     dot: {
       width: '4px', 
@@ -58,13 +81,20 @@ export const Handle: React.FC<HandleProps> = ({
 
   return (
     <div
-      style={styles.wrapper}
-      onClick={(e) => {
+      style={styles.hitArea}
+      onPointerDown={(e) => {
         e.stopPropagation();
-        if (onClick) onClick(e, nodeId, index, side);
+        if (onPointerDown) onPointerDown(e);
       }}
+      // Add data-attributes for robust hover detection
+      data-handle="true"
+      data-node-id={nodeId}
+      data-handle-index={index}
+      data-handle-side={side}
     >
-      <div style={styles.dot} />
+      <div style={styles.visual}>
+        <div style={styles.dot} />
+      </div>
     </div>
   );
 };

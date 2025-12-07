@@ -62,6 +62,7 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(null);
   const [mouseCanvasPos, setMouseCanvasPos] = useState<Position>({ x: 0, y: 0 });
+  const [hoveredHandle, setHoveredHandle] = useState<{ nodeId: string; index: number; side: Side } | null>(null);
 
   // Gesture State
   const pointerCache = useRef<Map<number, PointerEvent>>(new Map());
@@ -69,6 +70,10 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
   const lastPanPos = useRef<Position | null>(null);
   const isGestureActive = useRef(false);
   const gestureStartPos = useRef<Position | null>(null);
+
+  // Connection State Refs
+  const pointerDownPos = useRef<Position | null>(null);
+  const isDraggingConnection = useRef(false);
 
   // Calculate flow depths for sequential animation
   const { edgeDepths, maxDepth } = useMemo(() => {
@@ -163,6 +168,11 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     (e.target as Element).setPointerCapture(e.pointerId);
     pointerCache.current.set(e.pointerId, e.nativeEvent);
     
+    // If a click-to-click connection is pending and we click the canvas, cancel it.
+    if (pendingConnection && !isDraggingConnection.current && e.target === containerRef.current) {
+        setPendingConnection(null);
+    }
+
     if (e.target === containerRef.current) {
       gestureStartPos.current = { x: e.clientX, y: e.clientY };
     }
@@ -190,72 +200,123 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    pointerCache.current.set(e.pointerId, e.nativeEvent);
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
 
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      const currentViewport = { x: viewX.get(), y: viewY.get(), zoom: viewZoom.get() };
-      setMouseCanvasPos(screenToCanvas({ x: e.clientX, y: e.clientY }, currentViewport, rect));
+    const currentViewport = { x: viewX.get(), y: viewY.get(), zoom: viewZoom.get() };
+    const mousePos = { x: e.clientX, y: e.clientY };
+    const currentMouseCanvasPos = screenToCanvas(mousePos, currentViewport, rect);
+    setMouseCanvasPos(currentMouseCanvasPos);
+
+    if (pendingConnection) {
+        // Check if we've moved enough to be considered a drag
+        if (!isDraggingConnection.current && pointerDownPos.current) {
+            const dist = Math.hypot(e.clientX - pointerDownPos.current.x, e.clientY - pointerDownPos.current.y);
+            if (dist > 5) { // Drag threshold
+                isDraggingConnection.current = true;
+            }
+        }
+        
+        // Only do proximity check if we are actively dragging
+        if (isDraggingConnection.current) {
+            const HIT_RADIUS = 80;
+            let closestHandle: { nodeId: string; index: number; side: Side; dist: number } | null = null;
+            
+            for (const node of nodes) {
+                if (node.id === pendingConnection.sourceNodeId) continue;
+                for (const side in node.handles) {
+                    const sideKey = side as Side;
+                    const count = node.handles[sideKey] || 0;
+                    for (let i = 0; i < count; i++) {
+                        const handleOffset = getHandleOffset(node, sideKey, i);
+                        const handlePos = { x: node.position.x + handleOffset.x, y: node.position.y + handleOffset.y };
+                        const dist = Math.hypot(currentMouseCanvasPos.x - handlePos.x, currentMouseCanvasPos.y - handlePos.y);
+                        if (dist < HIT_RADIUS && (!closestHandle || dist < closestHandle.dist)) {
+                            closestHandle = { nodeId: node.id, index: i, side: sideKey, dist };
+                        }
+                    }
+                }
+            }
+             if (closestHandle) {
+                const newTarget = { nodeId: closestHandle.nodeId, index: closestHandle.index, side: closestHandle.side };
+                if (!hoveredHandle || hoveredHandle.nodeId !== newTarget.nodeId || hoveredHandle.index !== newTarget.index || hoveredHandle.side !== newTarget.side) {
+                    setHoveredHandle(newTarget);
+                }
+            } else {
+                if (hoveredHandle) setHoveredHandle(null);
+            }
+        }
     }
 
+    // Gesture Logic
+    pointerCache.current.set(e.pointerId, e.nativeEvent);
     if (pointerCache.current.size === 2 && prevPinchInfo.current) {
       const points = Array.from(pointerCache.current.values());
       // @ts-ignore
-      const newDist = getDistance(points[0] as PointerEvent, points[1] as PointerEvent);
-      // @ts-ignore
-      const newCenter = getCenter(points[0] as PointerEvent, points[1] as PointerEvent);
-      
+      const newDist = getDistance(points[0], points[1]); // @ts-ignore
+      const newCenter = getCenter(points[0], points[1]);
       const oldZoom = viewZoom.get();
       const zoomFactor = newDist / prevPinchInfo.current.dist;
       const newZoom = Math.min(Math.max(oldZoom * zoomFactor, 0.1), 5);
-
       const pointUnderCursorX = (prevPinchInfo.current.center.x - viewX.get()) / oldZoom;
       const pointUnderCursorY = (prevPinchInfo.current.center.y - viewY.get()) / oldZoom;
-
       const newX = newCenter.x - (pointUnderCursorX * newZoom);
       const newY = newCenter.y - (pointUnderCursorY * newZoom);
-
       viewX.set(newX);
       viewY.set(newY);
       viewZoom.set(newZoom);
-
       prevPinchInfo.current = { dist: newDist, center: newCenter };
-
     } else if (pointerCache.current.size === 1 && lastPanPos.current) {
       const dx = e.clientX - lastPanPos.current.x;
       const dy = e.clientY - lastPanPos.current.y;
-
       viewX.set(viewX.get() + dx);
       viewY.set(viewY.get() + dy);
-      
       lastPanPos.current = { x: e.clientX, y: e.clientY };
     }
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    (e.target as Element).releasePointerCapture(e.pointerId);
-    pointerCache.current.delete(e.pointerId);
-
-    if (pointerCache.current.size < 2) {
-      prevPinchInfo.current = null;
+    // DRAG-AND-DROP COMPLETION LOGIC
+    if (pendingConnection && isDraggingConnection.current) {
+        if (hoveredHandle) {
+            const sourceNodeId = pendingConnection.sourceNodeId;
+            const targetNodeId = hoveredHandle.nodeId;
+            if (sourceNodeId !== targetNodeId) {
+                const exists = edges.some(edge => 
+                    (edge.source === sourceNodeId && edge.target === targetNodeId && edge.sourceHandle === pendingConnection.sourceHandle && edge.targetHandle === hoveredHandle.index) ||
+                    (edge.source === targetNodeId && edge.target === sourceNodeId && edge.sourceHandle === hoveredHandle.index && edge.targetHandle === pendingConnection.sourceHandle)
+                );
+                if (!exists) {
+                    const newEdge: Edge = {
+                        id: generateId(),
+                        source: sourceNodeId, sourceHandle: pendingConnection.sourceHandle, sourceSide: pendingConnection.sourceSide,
+                        target: targetNodeId, targetHandle: hoveredHandle.index, targetSide: hoveredHandle.side
+                    };
+                    onEdgesChange([...edges, newEdge]);
+                }
+            }
+        }
+        setPendingConnection(null);
     }
     
+    // Reset drag-related state
+    isDraggingConnection.current = false;
+    setHoveredHandle(null);
+    
+    // Gesture & Canvas Logic
+    if ((e.target as Element).hasPointerCapture?.(e.pointerId)) {
+        (e.target as Element).releasePointerCapture(e.pointerId);
+    }
+    pointerCache.current.delete(e.pointerId);
+    if (pointerCache.current.size < 2) prevPinchInfo.current = null;
     if (pointerCache.current.size === 0) {
       if (gestureStartPos.current) {
         const dist = Math.hypot(e.clientX - gestureStartPos.current.x, e.clientY - gestureStartPos.current.y);
-        if (dist < 5 && e.target === containerRef.current) {
-           setSelectedNodeId(null);
-           setPendingConnection(null);
-        }
+        if (dist < 5 && e.target === containerRef.current) setSelectedNodeId(null);
       }
-
       if (isGestureActive.current) {
         isGestureActive.current = false;
-        onViewportChange({
-          x: viewX.get(),
-          y: viewY.get(),
-          zoom: viewZoom.get()
-        });
+        onViewportChange({ x: viewX.get(), y: viewY.get(), zoom: viewZoom.get() });
       }
       lastPanPos.current = null;
       gestureStartPos.current = null;
@@ -271,18 +332,14 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
       const zoomSensitivity = 0.001;
       const oldZoom = viewZoom.get();
       const newZoom = Math.min(Math.max(oldZoom - e.deltaY * zoomSensitivity, 0.1), 3);
-      
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) {
           const mouseX = e.clientX - rect.left;
           const mouseY = e.clientY - rect.top;
-          
           const pointX = (mouseX - viewX.get()) / oldZoom;
           const pointY = (mouseY - viewY.get()) / oldZoom;
-          
           const newX = mouseX - (pointX * newZoom);
           const newY = mouseY - (pointY * newZoom);
-          
           viewX.set(newX);
           viewY.set(newY);
           viewZoom.set(newZoom);
@@ -311,44 +368,44 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     }
   }, [nodes, onNodesChange]);
 
-  const handleHandleClick = (e: React.MouseEvent, nodeId: string, index: number, side: Side) => {
+  const handleHandlePointerDown = (e: React.PointerEvent<HTMLDivElement>, nodeId: string, index: number, side: Side) => {
     if (readOnly || activeTool !== 'connect') return;
     e.stopPropagation();
 
-    if (!pendingConnection) {
-      const node = nodes.find(n => n.id === nodeId);
-      if (!node) return;
-      const offset = getHandleOffset(node, side, index);
-      setPendingConnection({
-        sourceNodeId: nodeId,
-        sourceHandle: index,
-        sourceSide: side,
-        startPos: { x: node.position.x + offset.x, y: node.position.y + offset.y }
-      });
-    } else {
-      if (pendingConnection.sourceNodeId === nodeId) {
+    if (pendingConnection) {
+        // --- SECOND CLICK LOGIC ---
+        if (pendingConnection.sourceNodeId === nodeId) {
+            setPendingConnection(null); // Cancel on same node or handle
+            return;
+        }
+        
+        const sourceNodeId = pendingConnection.sourceNodeId;
+        const targetNodeId = nodeId;
+        const exists = edges.some(edge => 
+            (edge.source === sourceNodeId && edge.target === targetNodeId && edge.sourceHandle === pendingConnection.sourceHandle && edge.targetHandle === index) ||
+            (edge.source === targetNodeId && edge.target === sourceNodeId && edge.sourceHandle === index && edge.targetHandle === pendingConnection.sourceHandle)
+        );
+        if (!exists) {
+            const newEdge: Edge = {
+                id: generateId(),
+                source: sourceNodeId, sourceHandle: pendingConnection.sourceHandle, sourceSide: pendingConnection.sourceSide,
+                target: targetNodeId, targetHandle: index, targetSide: side
+            };
+            onEdgesChange([...edges, newEdge]);
+        }
         setPendingConnection(null);
-        return;
-      }
-      const exists = edges.some(edge => 
-        edge.source === pendingConnection.sourceNodeId && 
-        edge.target === nodeId &&
-        edge.sourceHandle === pendingConnection.sourceHandle &&
-        edge.targetHandle === index
-      );
-      if (!exists) {
-        const newEdge: Edge = {
-          id: generateId(),
-          source: pendingConnection.sourceNodeId,
-          sourceHandle: pendingConnection.sourceHandle,
-          sourceSide: pendingConnection.sourceSide,
-          target: nodeId,
-          targetHandle: index,
-          targetSide: side
-        };
-        onEdgesChange([...edges, newEdge]);
-      }
-      setPendingConnection(null);
+    } else {
+        // --- FIRST CLICK / START DRAG LOGIC ---
+        isDraggingConnection.current = false;
+        pointerDownPos.current = { x: e.clientX, y: e.clientY };
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        const node = nodes.find(n => n.id === nodeId);
+        if (!node) return;
+        const offset = getHandleOffset(node, side, index);
+        setPendingConnection({
+            sourceNodeId: nodeId, sourceHandle: index, sourceSide: side,
+            startPos: { x: node.position.x + offset.x, y: node.position.y + offset.y }
+        });
     }
   };
 
@@ -356,7 +413,7 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     const width = node.width || 200; 
     const height = node.height || 100;
     const gap = 12;
-    const handleSize = 14;
+    const handleSize = 12;
     const count = node.handles[side] || 0;
     const totalSpread = (count * handleSize) + ((count - 1) * gap);
     const startFromCenter = -totalSpread / 2 + handleSize / 2;
@@ -539,7 +596,8 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
                       }
                     }}
                     onDimensionsChange={handleNodeAutoResize}
-                    onHandleClick={handleHandleClick}
+                    hoveredHandle={hoveredHandle}
+                    onHandlePointerDown={handleHandlePointerDown}
                     onResize={(dims) => onNodeResize?.(node.id, dims)}
                   >
                     {renderNode(node)}

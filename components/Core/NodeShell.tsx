@@ -26,7 +26,11 @@ interface NodeShellProps {
   onDrag: (id: string, x: number, y: number) => void;
   onSelect: (id: string) => void;
   onDimensionsChange?: (id: string, width: number, height: number) => void;
-  onHandleClick: (e: React.MouseEvent, nodeId: string, index: number, side: Side) => void;
+  
+  hoveredHandle?: { nodeId: string; index: number; side: Side } | null;
+  onHandlePointerDown: (e: React.PointerEvent<HTMLDivElement>, nodeId: string, index: number, side: Side) => void;
+  // REMOVED: onHandlePointerEnter and onHandlePointerLeave are no longer needed.
+  
   onResize?: (newSize: { width: number, height: number }) => void;
 }
 
@@ -47,7 +51,8 @@ export const NodeShell: React.FC<NodeShellProps> = ({
   onDrag,
   onSelect,
   onDimensionsChange,
-  onHandleClick,
+  hoveredHandle,
+  onHandlePointerDown,
   onResize,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -195,7 +200,8 @@ export const NodeShell: React.FC<NodeShellProps> = ({
             index={i} 
             nodeId={id}
             isConnecting={isConnecting}
-            onClick={onHandleClick}
+            onPointerDown={(e) => onHandlePointerDown(e, id, i, 'top')}
+            isPotentialTarget={!!(hoveredHandle && hoveredHandle.nodeId === id && hoveredHandle.index === i && hoveredHandle.side === 'top')}
           />
         ))}
       </div>
@@ -207,7 +213,8 @@ export const NodeShell: React.FC<NodeShellProps> = ({
             index={i} 
             nodeId={id}
             isConnecting={isConnecting}
-            onClick={onHandleClick}
+            onPointerDown={(e) => onHandlePointerDown(e, id, i, 'right')}
+            isPotentialTarget={!!(hoveredHandle && hoveredHandle.nodeId === id && hoveredHandle.index === i && hoveredHandle.side === 'right')}
           />
         ))}
       </div>
@@ -219,7 +226,8 @@ export const NodeShell: React.FC<NodeShellProps> = ({
             index={i} 
             nodeId={id}
             isConnecting={isConnecting}
-            onClick={onHandleClick}
+            onPointerDown={(e) => onHandlePointerDown(e, id, i, 'bottom')}
+            isPotentialTarget={!!(hoveredHandle && hoveredHandle.nodeId === id && hoveredHandle.index === i && hoveredHandle.side === 'bottom')}
           />
         ))}
       </div>
@@ -231,7 +239,8 @@ export const NodeShell: React.FC<NodeShellProps> = ({
             index={i} 
             nodeId={id}
             isConnecting={isConnecting}
-            onClick={onHandleClick}
+            onPointerDown={(e) => onHandlePointerDown(e, id, i, 'left')}
+            isPotentialTarget={!!(hoveredHandle && hoveredHandle.nodeId === id && hoveredHandle.index === i && hoveredHandle.side === 'left')}
           />
         ))}
       </div>

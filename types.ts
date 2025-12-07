@@ -61,10 +61,3 @@ export interface PendingConnection {
   sourceSide: Side;
   startPos: Position;
 }
-
-export interface DragConnection {
-  sourceNodeId: string;
-  sourceHandleIndex: number;
-  sourceSide: Side;
-  currentPosition: Position;
-}
