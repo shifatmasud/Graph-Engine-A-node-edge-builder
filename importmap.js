@@ -6,6 +6,8 @@
     "framer-motion": "https://esm.sh/framer-motion@12.23.24?external=react",
     "@phosphor-icons/react": "https://esm.sh/@phosphor-icons/react@2.1.10?external=react&bundle",
     "gsap": "https://esm.sh/gsap@3.13.0?external=react",
-    "three": "https://esm.sh/three@0.180.0?external=react"
+    "three": "https://esm.sh/three@0.165.0?external=react",
+    "three/addons/": "https://esm.sh/three@0.165.0/examples/jsm/",
+    "@google/genai": "https://esm.sh/@google/genai"
   }
 }

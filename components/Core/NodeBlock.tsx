@@ -1,23 +1,15 @@
 import React, { memo, useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from './ThemeContext';
-import {
-  SignIn,
-  SignOut,
-  Cpu,
-  Pulse,
-  Gear,
-  Bug,
-  DownloadSimple,
-  PencilSimple,
-  TrashSimple,
-  Check,
-  DotsThree,
-} from '@phosphor-icons/react';
+// FIX: Switched to namespace import for @phosphor-icons/react to resolve module export errors.
+import * as Icon from '@phosphor-icons/react';
 import { NodeData } from '../../types';
 
 interface IPOSlateProps {
-  data: NodeData;
+  // FIX: Narrowed the type of `data` to only IPO nodes ('input'/'process'/'output'),
+  // as this component is not designed to handle 'embed' nodes. This resolves
+  // type errors when accessing the `value` property.
+  data: Extract<NodeData, { type: 'input' | 'process' | 'output' }>;
   onUpdate?: (data: Partial<NodeData>) => void;
   onDelete?: () => void;
 }
@@ -25,10 +17,10 @@ interface IPOSlateProps {
 const getNodeIcon = (type: string, color: string) => {
   const style = { width: 14, height: 14, color, opacity: 0.8 };
   switch (type) {
-    case 'input': return <SignIn style={style} weight="bold" />;
-    case 'output': return <SignOut style={style} weight="bold" />;
-    case 'process': return <Cpu style={style} weight="bold" />;
-    default: return <Pulse style={style} weight="bold" />;
+    case 'input': return <Icon.SignIn style={style} weight="bold" />;
+    case 'output': return <Icon.SignOut style={style} weight="bold" />;
+    case 'process': return <Icon.Cpu style={style} weight="bold" />;
+    default: return <Icon.Pulse style={style} weight="bold" />;
   }
 };
 
@@ -66,9 +58,9 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
 
   const getNodeSpecificActions = () => {
     switch(data.type) {
-      case 'input': return [ { label: 'Source Config', icon: <Gear size={12} /> } ];
-      case 'process': return [ { label: 'Debug', icon: <Bug size={12} /> } ];
-      case 'output': return [ { label: 'Export', icon: <DownloadSimple size={12} /> } ];
+      case 'input': return [ { label: 'Source Config', icon: <Icon.Gear size={12} /> } ];
+      case 'process': return [ { label: 'Debug', icon: <Icon.Bug size={12} /> } ];
+      case 'output': return [ { label: 'Export', icon: <Icon.DownloadSimple size={12} /> } ];
       default: return [];
     }
   };
@@ -233,7 +225,7 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
           style={styles.iconBtn} 
           onClick={(e) => { e.stopPropagation(); isEditing ? handleSave() : setShowMenu(!showMenu); }}
         >
-          {isEditing ? <Check size={14} color={theme.accent.valid} weight="bold" /> : <DotsThree size={18} weight="bold" />}
+          {isEditing ? <Icon.Check size={14} color={theme.accent.valid} weight="bold" /> : <Icon.DotsThree size={18} weight="bold" />}
         </button>
 
         <AnimatePresence>
@@ -273,7 +265,7 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.surface[3]}
                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
               >
-                <PencilSimple size={12} />
+                <Icon.PencilSimple size={12} />
                 Rename
               </button>
               <button 
@@ -286,7 +278,7 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.surface[3]}
                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
               >
-                <TrashSimple size={12} color={theme.accent.danger} />
+                <Icon.TrashSimple size={12} color={theme.accent.danger} />
                 Delete
               </button>
             </motion.div>

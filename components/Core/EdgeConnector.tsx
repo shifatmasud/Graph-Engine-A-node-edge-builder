@@ -3,7 +3,8 @@ import { motion, MotionValue, useTransform, AnimatePresence } from 'framer-motio
 import { getBezierPath, getBezierCenter } from '../../utils/geometry';
 import { Side } from '../../types';
 import { useTheme } from './ThemeContext';
-import { X } from '@phosphor-icons/react';
+// FIX: Switched to namespace import for @phosphor-icons/react to resolve module export errors.
+import * as Icon from '@phosphor-icons/react';
 
 interface EdgeConnectorProps {
   id: string;
@@ -160,7 +161,7 @@ export const EdgeConnector: React.FC<EdgeConnectorProps> = ({
                   e.currentTarget.style.color = theme.accent.danger;
                 }}
               >
-                 <X size={14} weight="bold" />
+                 <Icon.X size={14} weight="bold" />
               </button>
             </foreignObject>
           </motion.g>

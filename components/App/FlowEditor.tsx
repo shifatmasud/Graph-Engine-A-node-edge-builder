@@ -2,17 +2,66 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Node, Edge, Viewport, NodeData, Position } from '../../types';
 import { IPOSlate } from '../Core/NodeBlock'; 
+import { EmbedSlate } from '../Core/EmbedSlate';
 import { ContextMenu } from '../Section/ContextMenu';
 import { Dock } from '../Section/Dock';
 import { GraphEngine } from '../Core/GraphEngine';
+import { GeneratorModal } from '../Section/GeneratorModal';
 import { screenToCanvas, generateId } from '../../utils/geometry';
 import { useTheme } from '../Core/ThemeContext';
+import { GoogleGenAI, Type } from '@google/genai';
+
+const graphSchema = {
+  type: Type.OBJECT,
+  properties: {
+    nodes: {
+      type: Type.ARRAY,
+      description: 'An array of node objects.',
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING, description: 'Unique identifier for the node. Should be a short string, e.g., "node-1".' },
+          label: { type: Type.STRING, description: 'Display name of the node.' },
+          type: { type: Type.STRING, description: "Node type. Must be one of: 'input', 'process', or 'output'." },
+          position: {
+            type: Type.OBJECT,
+            properties: {
+              x: { type: Type.NUMBER, description: 'X coordinate on the canvas. Should be a multiple of 10.' },
+              y: { type: Type.NUMBER, description: 'Y coordinate on the canvas. Should be a multiple of 10.' },
+            },
+            required: ['x', 'y']
+          },
+          value: { 
+            type: Type.STRING, 
+            description: 'Example data or a brief description of what the node handles. For a "User Input" node, the value could be "User credentials". Keep it concise.' 
+          }
+        },
+        required: ['id', 'label', 'type', 'position', 'value']
+      }
+    },
+    edges: {
+      type: Type.ARRAY,
+      description: 'An array of edge objects connecting the nodes.',
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          source: { type: Type.STRING, description: 'The unique ID of the source node for the connection.' },
+          target: { type: Type.STRING, description: 'The unique ID of the target node for the connection.' },
+        },
+        required: ['source', 'target']
+      }
+    }
+  },
+  required: ['nodes', 'edges']
+};
+
 
 export const FlowEditor: React.FC = () => {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, zoom: 1 });
   const [activeTool, setActiveTool] = useState<'select' | 'connect' | 'pan'>('select');
+  const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
   const { theme } = useTheme();
   
   // Hidden file input for import
@@ -63,6 +112,11 @@ export const FlowEditor: React.FC = () => {
     ]);
   }, []);
 
+  const handleClearCanvas = () => {
+    setNodes([]);
+    setEdges([]);
+  };
+
   const handleAddNode = (type: NodeData['type'], screenPos?: Position) => {
     const targetX = screenPos ? screenPos.x : window.innerWidth / 2;
     const targetY = screenPos ? screenPos.y : window.innerHeight / 2;
@@ -75,20 +129,45 @@ export const FlowEditor: React.FC = () => {
     );
 
     const handles: Node['handles'] = { top: 1, right: 1, bottom: 1, left: 1 };
+    
+    let data: NodeData;
+    let nodeProps: { width: number; height?: number; } = { width: 200 };
+
+    if (type === 'embed') {
+        data = { label: 'New Embed', type: 'embed' };
+        nodeProps = { width: 400, height: 300 }; // 4:3 aspect ratio
+    } else {
+        data = { label: `New ${type}`, type };
+    }
+
     const newNode: Node = {
       id: generateId(),
-      position: { x: pos.x - 100, y: pos.y - 25 },
-      data: { label: `New ${type}`, type },
+      position: { x: pos.x - nodeProps.width / 2, y: pos.y - (nodeProps.height || 100) / 2 },
+      data,
       handles,
-      width: 200, 
+      width: nodeProps.width,
+      height: nodeProps.height,
     };
 
     setNodes(prev => [...prev, newNode]);
   };
 
-  const handleUpdateNode = (id: string, data: Partial<NodeData>) => {
-    setNodes(prev => prev.map(n => n.id === id ? { ...n, data: { ...n.data, ...data } } : n));
+  const handleUpdateNode = (id: string, updates: { data?: Partial<NodeData>, width?: number, height?: number }) => {
+      setNodes(prev => prev.map(n => {
+        if (n.id !== id) return n;
+        const { data, ...sizeUpdates } = updates;
+        return {
+            ...n,
+            ...sizeUpdates,
+            data: data ? { ...n.data, ...data } : n.data,
+        };
+    }));
   };
+  
+  const handleNodeResize = (id: string, dimensions: { width: number, height: number }) => {
+    setNodes(prev => prev.map(n => n.id === id ? { ...n, ...dimensions } : n));
+  };
+
 
   const handleDeleteNode = (id: string) => {
     setNodes(prev => prev.filter(n => n.id !== id));
@@ -99,9 +178,13 @@ export const FlowEditor: React.FC = () => {
     let output = "// NEXUS FLOW GLOBAL PSEUDO CODE\n\n// --- NODES ---\n";
     
     nodes.forEach(n => {
-        output += `[${n.data.type.toUpperCase()}] ${n.data.label}`;
-        if (n.data.value !== undefined && n.data.value !== '') {
-            output += ` = ${n.data.value}`;
+        if (n.data.type !== 'embed') {
+            output += `[${n.data.type.toUpperCase()}] ${n.data.label}`;
+            if (n.data.value !== undefined && n.data.value !== '') {
+                output += ` = ${n.data.value}`;
+            }
+        } else {
+            output += `[EMBED] ${n.data.label} (${n.data.embedData?.fileName || '...'})`
         }
         output += '\n';
     });
@@ -119,6 +202,62 @@ export const FlowEditor: React.FC = () => {
     navigator.clipboard.writeText(output);
   };
 
+  const handleGenerateGraph = async (prompt: string) => {
+    if (!prompt) return;
+
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+    
+    const systemInstruction = `You are an expert system architect and visual designer. Your task is to generate a directed graph based on a user's description. The graph must be represented as a JSON object containing 'nodes' and 'edges'.
+
+Follow these layout rules strictly:
+1.  **Canvas & Grid:** Assume a virtual canvas of 1500px wide. Place nodes on a coarse grid, making their 'x' and 'y' coordinates multiples of 50. The top-left of the canvas is (0,0).
+2.  **Logical Flow:** The graph must flow logically from left (inputs) to right (outputs). Arrange nodes in clear vertical columns based on their logical sequence.
+3.  **Node Spacing:** Maintain a minimum horizontal distance of 250px and a minimum vertical distance of 150px between any two nodes to prevent clutter and overlap.
+4.  **Minimize Edge Crossing:** Arrange nodes to minimize the number of crossing connections. This is a high priority.
+5.  **Alignment:** Align nodes within the same logical layer (column) vertically for a clean, organized appearance. Start the first column of nodes at x >= 100.
+6.  **Schema Adherence & Data:** Each node must have a unique 'id', a 'label', a 'type' ('input', 'process', or 'output'), a 'position' {x, y}, and a 'value'. For the 'value', provide a meaningful and concise example string representing the data the node might handle (e.g., "User credentials" or "JWT Token Validation"). Each edge must connect two nodes using their 'id's in the 'source' and 'target' fields. Ensure all node IDs used in edges exist in the nodes array.`;
+    
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: `Generate a graph for: "${prompt}"`,
+        config: {
+            responseMimeType: 'application/json',
+            responseSchema: graphSchema,
+            systemInstruction,
+        },
+    });
+
+    const graphData = JSON.parse(response.text);
+
+    if (!graphData.nodes || !graphData.edges) {
+        throw new Error("Invalid graph structure received from AI.");
+    }
+
+    const newNodes: Node[] = graphData.nodes.map((n: any) => ({
+        id: n.id,
+        position: n.position,
+        data: { label: n.label, type: n.type as ('input'|'process'|'output'), value: n.value },
+        handles: { top: 1, right: 1, bottom: 1, left: 1 },
+        width: 200,
+    }));
+
+    const newEdges: Edge[] = graphData.edges.map((e: any) => ({
+        id: generateId(),
+        source: e.source,
+        sourceHandle: 0,
+        sourceSide: 'right',
+        target: e.target,
+        targetHandle: 0,
+        targetSide: 'left',
+    }));
+
+    setNodes(newNodes);
+    setEdges(newEdges);
+    setViewport({ x: 0, y: 0, zoom: 1 });
+    setIsGeneratorOpen(false); // On success, close the modal.
+  };
+
+
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     setContextMenuPos({ x: e.clientX, y: e.clientY });
@@ -130,8 +269,7 @@ export const FlowEditor: React.FC = () => {
     } else if (action === 'reset_view') {
         setViewport({ x: 0, y: 0, zoom: 1 });
     } else if (action === 'clear_canvas') {
-        setNodes([]);
-        setEdges([]);
+        handleClearCanvas();
     } else if (action === 'copy_pseudo') {
         handleCopyGlobalPseudo();
     } else if (action === 'select_tool') {
@@ -144,7 +282,7 @@ export const FlowEditor: React.FC = () => {
   };
 
   const exportProject = () => {
-    const project = { version: '1.0', nodes, edges, viewport };
+    const project = { version: '1.1', nodes, edges, viewport };
     const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -243,13 +381,21 @@ export const FlowEditor: React.FC = () => {
         viewport={viewport}
         onViewportChange={setViewport}
         activeTool={activeTool}
-        renderNode={(node) => (
-            <IPOSlate 
-                data={node.data} 
-                onUpdate={(data) => handleUpdateNode(node.id, data)}
-                onDelete={() => handleDeleteNode(node.id)}
-            />
-        )}
+        onNodeResize={handleNodeResize}
+        renderNode={(node) => {
+            if (node.data.type === 'embed') {
+                return <EmbedSlate 
+                            data={node.data} 
+                            onUpdate={(updates) => handleUpdateNode(node.id, updates)}
+                            onDelete={() => handleDeleteNode(node.id)}
+                       />
+            }
+            return <IPOSlate 
+                        data={node.data}
+                        onUpdate={(data) => handleUpdateNode(node.id, { data })}
+                        onDelete={() => handleDeleteNode(node.id)}
+                   />
+        }}
       />
 
       {/* UI Overlay */}
@@ -258,7 +404,7 @@ export const FlowEditor: React.FC = () => {
             style={styles.title}
         >Nexus Flow</h1>
         <p style={styles.subtitle}>
-            v4.0 // {activeTool.toUpperCase()}
+            v4.1 // {activeTool.toUpperCase()}
         </p>
       </div>
 
@@ -266,17 +412,26 @@ export const FlowEditor: React.FC = () => {
         activeTool={activeTool}
         onSelectTool={setActiveTool}
         onAddNode={handleAddNode}
-        onClear={() => { setNodes([]); setEdges([]); }}
+        onClear={handleClearCanvas}
         onResetView={() => setViewport({ x: 0, y: 0, zoom: 1 })}
         onImport={triggerImport}
         onExport={exportProject}
         onCopyPseudo={handleCopyGlobalPseudo}
+        onGenerateGraph={() => setIsGeneratorOpen(true)}
       />
 
       <ContextMenu 
         position={contextMenuPos} 
         onClose={() => setContextMenuPos(null)} 
         onAction={handleContextAction}
+      />
+      
+      <GeneratorModal 
+        isOpen={isGeneratorOpen}
+        onClose={() => setIsGeneratorOpen(false)}
+        onSubmit={handleGenerateGraph}
+        shouldConfirm={nodes.length > 0}
+        onClear={handleClearCanvas}
       />
     </div>
   );

@@ -1,8 +1,10 @@
 import React, { useRef, useLayoutEffect, useEffect } from 'react';
-import { motion, MotionValue, PanInfo } from 'framer-motion';
+import { motion, MotionValue, PanInfo, useMotionValue } from 'framer-motion';
 import { Handle } from './Handle';
 import { Side } from '../../types';
 import { useTheme } from './ThemeContext';
+// FIX: Switched to namespace import for @phosphor-icons/react to resolve module export errors.
+import * as Icon from '@phosphor-icons/react';
 
 const HANDLE_SIZE = 12;
 
@@ -15,14 +17,17 @@ interface NodeShellProps {
   isDraggable?: boolean; 
   isPanMode?: boolean; 
   showHandles?: boolean; 
+  isResizable?: boolean;
   handles?: Partial<Record<Side, number>>;
   width?: number;
+  height?: number;
   children?: React.ReactNode;
   
   onDrag: (id: string, x: number, y: number) => void;
   onSelect: (id: string) => void;
   onDimensionsChange?: (id: string, width: number, height: number) => void;
   onHandleClick: (e: React.MouseEvent, nodeId: string, index: number, side: Side) => void;
+  onResize?: (newSize: { width: number, height: number }) => void;
 }
 
 export const NodeShell: React.FC<NodeShellProps> = ({
@@ -34,17 +39,29 @@ export const NodeShell: React.FC<NodeShellProps> = ({
   isDraggable = true,
   isPanMode = false,
   showHandles = false,
+  isResizable = false,
   handles = { top: 0, right: 0, bottom: 0, left: 0 },
   width = 200, 
+  height,
   children,
   onDrag,
   onSelect,
   onDimensionsChange,
   onHandleClick,
+  onResize,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const onDimensionsChangeRef = useRef(onDimensionsChange);
   const { theme } = useTheme();
+  
+  const initialSizeRef = useRef({ width: 0, height: 0 });
+  const mvWidth = useMotionValue(width);
+  const mvHeight = useMotionValue(height || 0);
+
+  useEffect(() => {
+    mvWidth.set(width);
+    if(height) mvHeight.set(height);
+  }, [width, height, mvWidth, mvHeight]);
 
   useEffect(() => {
     onDimensionsChangeRef.current = onDimensionsChange;
@@ -61,6 +78,8 @@ export const NodeShell: React.FC<NodeShellProps> = ({
             const w = target.offsetWidth;
             const h = target.offsetHeight;
             if (w > 0 && h > 0) {
+                // For non-resizable nodes, height is auto. Sync it.
+                if (!isResizable) mvHeight.set(h);
                 onDimensionsChangeRef.current(id, w, h);
             }
           }
@@ -69,7 +88,7 @@ export const NodeShell: React.FC<NodeShellProps> = ({
     
     observer.observe(containerRef.current);
     return () => observer.disconnect();
-  }, [id]);
+  }, [id, isResizable, mvHeight]);
 
   const handleDragEnd = (_: any, info: PanInfo) => {
     onDrag(id, x.get(), y.get());
@@ -104,7 +123,7 @@ export const NodeShell: React.FC<NodeShellProps> = ({
     shell: {
       position: 'absolute' as const,
       minWidth: '150px',
-      width: width || 'auto',
+      minHeight: '100px',
       borderRadius: theme.radius[4],
       background: theme.surface[2],
       boxShadow: isSelected 
@@ -121,13 +140,39 @@ export const NodeShell: React.FC<NodeShellProps> = ({
       position: 'relative' as const,
       zIndex: 2,
       width: '100%',
+      flex: 1, // Allow content to grow
+      display: 'flex',
+      minHeight: 0, // Flexbox fix for overflow
+    },
+    resizeHandle: {
+      position: 'absolute' as const,
+      bottom: -4,
+      right: -4,
+      width: '20px',
+      height: '20px',
+      cursor: 'nwse-resize',
+      zIndex: 30,
+      display: 'flex',
+      alignItems: 'flex-end',
+      justifyContent: 'flex-end',
+      color: theme.content[3],
+      opacity: showHandles ? 1 : 0,
+      transform: showHandles ? 'scale(1)' : 'scale(0.8)',
+      pointerEvents: showHandles ? ('auto' as const) : ('none' as const),
+      transition: 'opacity 0.2s ease, transform 0.2s ease',
     }
   };
 
   return (
     <motion.div
       ref={containerRef}
-      style={{ ...styles.shell, x, y }}
+      style={{ 
+          ...styles.shell, 
+          x, 
+          y, 
+          width: mvWidth,
+          height: height ? mvHeight : 'auto',
+      }}
       drag={isDraggable} 
       dragMomentum={false}
       onDragEnd={handleDragEnd}
@@ -194,6 +239,30 @@ export const NodeShell: React.FC<NodeShellProps> = ({
       <div style={styles.contentArea}>
         {children}
       </div>
+
+      {isResizable && (
+        <motion.div
+            style={styles.resizeHandle}
+            drag
+            dragMomentum={false}
+            dragElastic={0}
+            onDragStart={() => {
+                initialSizeRef.current = { width: mvWidth.get(), height: mvHeight.get() };
+            }}
+            onDrag={(e, info) => {
+                const newWidth = Math.max(200, initialSizeRef.current.width + info.offset.x);
+                const newHeight = Math.max(150, initialSizeRef.current.height + info.offset.y);
+                mvWidth.set(newWidth);
+                mvHeight.set(newHeight);
+            }}
+            onDragEnd={() => {
+                onResize?.({ width: mvWidth.get(), height: mvHeight.get() });
+            }}
+            onPointerDown={(e) => e.stopPropagation()} // Prevent node selection
+        >
+            <Icon.CornersOut size={12} weight="bold" />
+        </motion.div>
+    )}
     </motion.div>
   );
 };

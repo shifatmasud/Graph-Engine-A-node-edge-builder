@@ -13,7 +13,9 @@
     "react-dom": "^19.2.1",
     "framer-motion": "^12.23.25",
     "lucide-react": "^0.555.0",
-    "@phosphor-icons/react": "^2.1.10"
+    "@phosphor-icons/react": "^2.1.10",
+    "three": "^0.181.2",
+    "@google/genai": "^1.31.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

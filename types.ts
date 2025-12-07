@@ -6,11 +6,25 @@ export interface Position {
 
 export type Side = 'top' | 'right' | 'bottom' | 'left';
 
-export interface NodeData {
-  label: string;
-  type: 'input' | 'process' | 'output';
-  value?: string | number;
+export interface EmbedData {
+  mimeType: string;
+  dataUrl: string;
+  fileName?: string;
 }
+
+export type NodeData = (
+  {
+    label: string;
+    type: 'input' | 'process' | 'output';
+    value?: string | number;
+  } |
+  {
+    type: 'embed';
+    embedData?: EmbedData;
+    label: string;
+  }
+);
+
 
 export interface Node {
   id: string;

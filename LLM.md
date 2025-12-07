@@ -4,9 +4,12 @@ This project is a custom node editor implementation.
 
 ## Key Files
 
-- `components/App/FlowEditor.tsx`: Main logic hub. Handles viewport state, node state, and global event listeners for the canvas.
+- `components/App/FlowEditor.tsx`: Main logic hub. Handles viewport state, node state, and global event listeners for the canvas. This is also where the Gemini API integration for graph generation is handled.
 - `components/Core/GraphEngine.tsx`: The core logic for canvas interactions (pan, zoom, gestures), node/edge rendering, and connection management.
 - `components/Core/NodeShell.tsx`: The wrapper component for nodes, handling drag logic, selection state, and handle rendering.
+- `components/Core/EmbedSlate.tsx`: A new component to render the content of the 'embed' node type, including images, videos, and a 3D viewer.
+- `components/Core/GLBViewer.tsx`: A Three.js based component for rendering `.glb` 3D models inside an Embed node.
+- `components/Section/GeneratorModal.tsx`: A modal UI for users to input prompts for the Gemini AI graph generation feature.
 - `utils/geometry.ts`: Critical math for converting screen coordinates to canvas coordinates (accounting for zoom/pan) and generating Bezier paths.
 
 ## Styling Logic
@@ -27,3 +30,4 @@ This project is a custom node editor implementation.
 
 - No external flow libraries (React Flow, etc).
 - No Tailwind CSS. All styling must be CSS-in-JS using provided theme tokens.
+- Gemini API calls should be structured with a specific JSON schema to ensure reliable output for graph generation.

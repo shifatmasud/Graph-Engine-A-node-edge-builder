@@ -1,18 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  SignIn,
-  Cpu,
-  SignOut,
-  Code,
-  Target,
-  TrashSimple,
-  MouseSimple,
-  Hand,
-  FlowArrow,
-  UploadSimple,
-  DownloadSimple,
-} from '@phosphor-icons/react';
+// FIX: Switched to namespace import for @phosphor-icons/react to resolve module export errors.
+import * as Icon from '@phosphor-icons/react';
 import { Position } from '../../types';
 import { useTheme } from '../Core/ThemeContext';
 
@@ -137,20 +126,21 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ position, onClose, onA
   };
 
   const menuItems = [
-    { label: 'Add Input Node', icon: <SignIn size={14} color={theme.accent.primary} />, action: 'add_node', payload: 'input' },
-    { label: 'Add Process Node', icon: <Cpu size={14} color={theme.accent.secondary} />, action: 'add_node', payload: 'process' },
-    { label: 'Add Output Node', icon: <SignOut size={14} color={theme.accent.valid} />, action: 'add_node', payload: 'output' },
+    { label: 'Add Input Node', icon: <Icon.SignIn size={14} color={theme.accent.primary} />, action: 'add_node', payload: 'input' },
+    { label: 'Add Process Node', icon: <Icon.Cpu size={14} color={theme.accent.secondary} />, action: 'add_node', payload: 'process' },
+    { label: 'Add Output Node', icon: <Icon.SignOut size={14} color={theme.accent.valid} />, action: 'add_node', payload: 'output' },
+    { label: 'Add Embed Node', icon: <Icon.FileImage size={14} color={theme.content[2]} />, action: 'add_node', payload: 'embed' },
     { separator: true },
-    { label: 'Select', icon: <MouseSimple size={14} color={theme.content[1]} />, action: 'select_tool', payload: 'select' },
-    { label: 'Connect', icon: <FlowArrow size={14} color={theme.content[1]} />, action: 'select_tool', payload: 'connect' },
-    { label: 'Pan', icon: <Hand size={14} color={theme.content[1]} />, action: 'select_tool', payload: 'pan' },
+    { label: 'Select', icon: <Icon.MouseSimple size={14} color={theme.content[1]} />, action: 'select_tool', payload: 'select' },
+    { label: 'Connect', icon: <Icon.FlowArrow size={14} color={theme.content[1]} />, action: 'select_tool', payload: 'connect' },
+    { label: 'Pan', icon: <Icon.Hand size={14} color={theme.content[1]} />, action: 'select_tool', payload: 'pan' },
     { separator: true },
-    { label: 'Import Project...', icon: <UploadSimple size={14} color={theme.content[1]} />, action: 'import' },
-    { label: 'Export Project...', icon: <DownloadSimple size={14} color={theme.content[1]} />, action: 'export' },
+    { label: 'Import Project...', icon: <Icon.UploadSimple size={14} color={theme.content[1]} />, action: 'import' },
+    { label: 'Export Project...', icon: <Icon.DownloadSimple size={14} color={theme.content[1]} />, action: 'export' },
     { separator: true },
-    { label: 'Copy Pseudo Code', icon: <Code size={14} color={theme.content[1]} />, action: 'copy_pseudo' },
-    { label: 'Reset View', icon: <Target size={14} color={theme.content[1]} />, action: 'reset_view' },
-    { label: 'Clear Canvas', icon: <TrashSimple size={14} color={theme.accent.danger} />, action: 'clear_canvas' },
+    { label: 'Copy Pseudo Code', icon: <Icon.Code size={14} color={theme.content[1]} />, action: 'copy_pseudo' },
+    { label: 'Reset View', icon: <Icon.Target size={14} color={theme.content[1]} />, action: 'reset_view' },
+    { label: 'Clear Canvas', icon: <Icon.TrashSimple size={14} color={theme.accent.danger} />, action: 'clear_canvas' },
   ];
 
   return (

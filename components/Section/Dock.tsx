@@ -1,26 +1,8 @@
-
-
 // FIX: Corrected the import of useState and useRef from 'react'. The hook 'useRef' was incorrectly quoted as a string.
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Cursor,
-  Hand,
-  Plugs,
-  Plus,
-  Faders,
-  Sun,
-  Moon,
-  UploadSimple,
-  DownloadSimple,
-  Code,
-  CornersOut,
-  Trash,
-  SignIn,
-  Cpu,
-  SignOut,
-  X
-} from '@phosphor-icons/react';
+// FIX: Switched to namespace import for @phosphor-icons/react to resolve module export errors.
+import * as Icon from '@phosphor-icons/react';
 import { NodeData } from '../../types';
 import { useTheme } from '../Core/ThemeContext';
 
@@ -33,6 +15,7 @@ interface DockProps {
   onImport: () => void;
   onExport: () => void;
   onCopyPseudo: () => void;
+  onGenerateGraph: () => void;
 }
 
 // --- Internal Components ---
@@ -175,13 +158,16 @@ const MenuAction = ({
   );
 };
 
-const AddNodeMenu = ({ onAdd }: { onAdd: (t: NodeData['type']) => void }) => {
+const AddNodeMenu = ({ onAdd, onGenerate }: { onAdd: (t: NodeData['type']) => void; onGenerate: () => void; }) => {
   const { theme } = useTheme();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-      <MenuAction icon={<SignIn size={16} weight="duotone" color={theme.accent.primary} />} label="Input Node" onClick={() => onAdd('input')} />
-      <MenuAction icon={<Cpu size={16} weight="duotone" color={theme.accent.secondary} />} label="Process Node" onClick={() => onAdd('process')} />
-      <MenuAction icon={<SignOut size={16} weight="duotone" color={theme.accent.valid} />} label="Output Node" onClick={() => onAdd('output')} />
+      <MenuAction icon={<Icon.SignIn size={16} weight="duotone" color={theme.accent.primary} />} label="Input Node" onClick={() => onAdd('input')} />
+      <MenuAction icon={<Icon.Cpu size={16} weight="duotone" color={theme.accent.secondary} />} label="Process Node" onClick={() => onAdd('process')} />
+      <MenuAction icon={<Icon.SignOut size={16} weight="duotone" color={theme.accent.valid} />} label="Output Node" onClick={() => onAdd('output')} />
+      <MenuAction icon={<Icon.FileImage size={16} weight="duotone" color={theme.content[2]} />} label="Embed Node" onClick={() => onAdd('embed')} />
+      <div style={{ height: '1px', background: theme.border, margin: '4px 0' }} />
+      <MenuAction icon={<Icon.Sparkle size={16} weight="duotone" color={theme.accent.secondary} />} label="Generate with AI" onClick={onGenerate} />
     </div>
   );
 };
@@ -269,24 +255,27 @@ export const Dock: React.FC<DockProps> = (props) => {
               {activeMenu === 'settings' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                   <MenuAction 
-                    icon={mode === 'light' ? <Moon size={16} /> : <Sun size={16} />} 
+                    icon={mode === 'light' ? <Icon.Moon size={16} /> : <Icon.Sun size={16} />} 
                     label={mode === 'light' ? "Dark Mode" : "Light Mode"} 
                     onClick={() => exec(toggle)} 
                   />
                   
                   <div style={{ height: '1px', background: theme.border, margin: '4px 0' }} />
                   
-                  <MenuAction icon={<UploadSimple size={16} />} label="Import JSON" onClick={() => exec(props.onImport)} />
-                  <MenuAction icon={<DownloadSimple size={16} />} label="Export JSON" onClick={() => exec(props.onExport)} />
-                  <MenuAction icon={<Code size={16} />} label="Copy Pseudo Code" onClick={() => exec(props.onCopyPseudo)} />
+                  <MenuAction icon={<Icon.UploadSimple size={16} />} label="Import JSON" onClick={() => exec(props.onImport)} />
+                  <MenuAction icon={<Icon.DownloadSimple size={16} />} label="Export JSON" onClick={() => exec(props.onExport)} />
+                  <MenuAction icon={<Icon.Code size={16} />} label="Copy Pseudo Code" onClick={() => exec(props.onCopyPseudo)} />
                   
                   <div style={{ height: '1px', background: theme.border, margin: '4px 0' }} />
                   
-                  <MenuAction icon={<CornersOut size={16} />} label="Center View" onClick={() => exec(props.onResetView)} />
-                  <MenuAction icon={<Trash size={16} weight="bold" />} label="Clear All" danger onClick={() => exec(props.onClear)} />
+                  <MenuAction icon={<Icon.CornersOut size={16} />} label="Center View" onClick={() => exec(props.onResetView)} />
+                  <MenuAction icon={<Icon.Trash size={16} weight="bold" />} label="Clear All" danger onClick={() => exec(props.onClear)} />
                 </div>
               ) : (
-                <AddNodeMenu onAdd={(t) => exec(() => props.onAddNode(t))} />
+                <AddNodeMenu 
+                  onAdd={(t) => exec(() => props.onAddNode(t))} 
+                  onGenerate={() => exec(props.onGenerateGraph)}
+                />
               )}
             </motion.div>
           </>
@@ -300,17 +289,17 @@ export const Dock: React.FC<DockProps> = (props) => {
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
       >
         <DockButton 
-          icon={<Cursor size={20} weight={props.activeTool === 'select' ? 'fill' : 'regular'} />} 
+          icon={<Icon.Cursor size={20} weight={props.activeTool === 'select' ? 'fill' : 'regular'} />} 
           onClick={() => props.onSelectTool('select')} 
           isActive={props.activeTool === 'select'} 
         />
         <DockButton 
-          icon={<Hand size={20} weight={props.activeTool === 'pan' ? 'fill' : 'regular'} />} 
+          icon={<Icon.Hand size={20} weight={props.activeTool === 'pan' ? 'fill' : 'regular'} />} 
           onClick={() => props.onSelectTool('pan')} 
           isActive={props.activeTool === 'pan'} 
         />
         <DockButton 
-          icon={<Plugs size={20} weight={props.activeTool === 'connect' ? 'fill' : 'regular'} />} 
+          icon={<Icon.Plugs size={20} weight={props.activeTool === 'connect' ? 'fill' : 'regular'} />} 
           onClick={() => props.onSelectTool('connect')} 
           isActive={props.activeTool === 'connect'} 
         />
@@ -318,13 +307,13 @@ export const Dock: React.FC<DockProps> = (props) => {
         <Separator />
         
         <DockButton 
-          icon={<Plus size={20} weight="bold" />} 
+          icon={<Icon.Plus size={20} weight="bold" />} 
           onClick={() => toggleMenu('add')} 
           isActive={activeMenu === 'add'}
           activeColor={theme.content[1]}
         />
         <DockButton 
-          icon={<Faders size={20} weight="regular" />} 
+          icon={<Icon.Faders size={20} weight="regular" />} 
           onClick={() => toggleMenu('settings')} 
           isActive={activeMenu === 'settings'}
           activeColor={theme.content[1]}

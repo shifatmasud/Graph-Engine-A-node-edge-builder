@@ -17,6 +17,7 @@ interface GraphEngineProps {
   onViewportChange: (viewport: Viewport) => void;
   readOnly?: boolean;
   activeTool?: 'select' | 'connect' | 'pan';
+  onNodeResize?: (id: string, dimensions: { width: number, height: number }) => void;
 }
 
 // Helpers
@@ -42,7 +43,8 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
   viewport,
   onViewportChange,
   readOnly = false,
-  activeTool = 'select'
+  activeTool = 'select',
+  onNodeResize,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const nodeMotionValues = useRef(new Map<string, { x: MotionValue<number>; y: MotionValue<number> }>());
@@ -301,7 +303,7 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     onNodesChange(updatedNodes);
   }, [nodes, onNodesChange, readOnly, activeTool]);
 
-  const handleNodeResize = useCallback((id: string, width: number, height: number) => {
+  const handleNodeAutoResize = useCallback((id: string, width: number, height: number) => {
     const node = nodes.find(n => n.id === id);
     if (!node) return;
     if (Math.abs((node.width || 0) - width) > 1 || Math.abs((node.height || 0) - height) > 1) {
@@ -522,20 +524,23 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
                     x={mvs.x}
                     y={mvs.y}
                     width={node.width}
+                    height={node.height}
                     handles={node.handles}
                     isSelected={selectedNodeId === node.id}
                     showHandles={activeTool === 'connect'}
                     isDraggable={activeTool === 'select'}
                     isConnecting={!!pendingConnection}
                     isPanMode={activeTool === 'pan'}
+                    isResizable={node.data.type === 'embed'}
                     onDrag={handleNodeDrag}
                     onSelect={(id) => {
                       if (activeTool === 'select') {
                         setSelectedNodeId(id);
                       }
                     }}
-                    onDimensionsChange={handleNodeResize}
+                    onDimensionsChange={handleNodeAutoResize}
                     onHandleClick={handleHandleClick}
+                    onResize={(dims) => onNodeResize?.(node.id, dims)}
                   >
                     {renderNode(node)}
                   </NodeShell>
