@@ -131,12 +131,12 @@ export const EmbedSlate: React.FC<EmbedSlateProps> = ({ data, onUpdate, onDelete
         backgroundColor: theme.surface[1],
     },
     header: {
-      padding: '12px 14px 8px',
+      padding: '0 0 0 14px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      gap: '10px',
       width: '100%',
+      height: '44px',
       flexShrink: 0,
     },
     headerText: {
@@ -156,17 +156,20 @@ export const EmbedSlate: React.FC<EmbedSlateProps> = ({ data, onUpdate, onDelete
       border: 'none',
       cursor: 'pointer',
       color: theme.content[3],
-      padding: '4px',
-      borderRadius: '4px',
+      width: '44px',
+      height: '44px',
+      borderRadius: '50%',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      opacity: isHovered || showMenu ? 1 : 0,
-      transition: 'opacity 0.2s, color 0.2s',
+      opacity: (isHovered || showMenu) ? 1 : 0.8, // Increased default visibility
+      transition: 'opacity 0.2s, color 0.2s, background 0.2s',
+      flexShrink: 0,
+      outline: 'none',
     },
     dropdown: {
       position: 'absolute' as const,
-      top: '36px',
+      top: '40px',
       right: '8px',
       background: theme.surface[2],
       border: `1px solid ${theme.border}`,
@@ -238,7 +241,7 @@ export const EmbedSlate: React.FC<EmbedSlateProps> = ({ data, onUpdate, onDelete
       {showMenu && (
         <div 
           style={{ position: 'fixed', inset: 0, zIndex: 55 }} 
-          onClick={(e) => { e.stopPropagation(); setShowMenu(false); }} 
+          onPointerDown={(e) => { e.stopPropagation(); setShowMenu(false); }} 
         />
       )}
       <input
@@ -256,8 +259,13 @@ export const EmbedSlate: React.FC<EmbedSlateProps> = ({ data, onUpdate, onDelete
             }
             <span style={styles.headerText} title={data.label}>{data.label}</span>
         </div>
-        <button style={styles.menuButton} onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}>
-            <Icon.DotsThree size={18} weight="bold" />
+        <button 
+          style={styles.menuButton} 
+          onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setShowMenu(!showMenu); }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.surface[3]}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+        >
+            <Icon.DotsThree size={22} weight="bold" />
         </button>
         <AnimatePresence>
             {showMenu && (
@@ -270,7 +278,8 @@ export const EmbedSlate: React.FC<EmbedSlateProps> = ({ data, onUpdate, onDelete
             >
                 <button 
                   style={styles.menuItem}
-                  onClick={() => {
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
                     setShowMenu(false);
                     setIsUrlModalOpen(true);
                   }}
@@ -286,10 +295,10 @@ export const EmbedSlate: React.FC<EmbedSlateProps> = ({ data, onUpdate, onDelete
                     <div style={{ height: 1, background: theme.border, margin: '2px 0' }} />
                     <button 
                       style={styles.menuItem}
-                      onClick={(e) => {
+                      onPointerDown={(e) => {
                         e.stopPropagation();
                         setShowMenu(false);
-                        clearContent(e);
+                        onUpdate({ data: { embedData: undefined, label: 'Embed Node' } });
                       }}
                       onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.surface[3]}
                       onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -304,7 +313,7 @@ export const EmbedSlate: React.FC<EmbedSlateProps> = ({ data, onUpdate, onDelete
                 
                 <button 
                   style={{ ...styles.menuItem, color: theme.accent.danger }}
-                  onClick={(e) => {
+                  onPointerDown={(e) => {
                       e.stopPropagation();
                       setShowMenu(false);
                       onDelete?.();
@@ -324,7 +333,7 @@ export const EmbedSlate: React.FC<EmbedSlateProps> = ({ data, onUpdate, onDelete
         {!data.embedData ? (
           <div
             style={styles.uploadPlaceholder}
-            onClick={() => fileInputRef.current?.click()}
+            onPointerDown={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
             onMouseEnter={(e) => { e.currentTarget.style.borderColor = theme.accent.primary; e.currentTarget.style.color = theme.content[1]; }}
             onMouseLeave={(e) => { e.currentTarget.style.borderColor = theme.border; e.currentTarget.style.color = theme.content[2]; }}
           >

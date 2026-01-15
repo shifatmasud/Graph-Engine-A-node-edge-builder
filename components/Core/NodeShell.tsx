@@ -29,7 +29,6 @@ interface NodeShellProps {
   
   hoveredHandle?: { nodeId: string; index: number; side: Side } | null;
   onHandlePointerDown: (e: React.PointerEvent<HTMLDivElement>, nodeId: string, index: number, side: Side) => void;
-  // REMOVED: onHandlePointerEnter and onHandlePointerLeave are no longer needed.
   
   onResize?: (newSize: { width: number, height: number }) => void;
 }
@@ -83,7 +82,6 @@ export const NodeShell: React.FC<NodeShellProps> = ({
             const w = target.offsetWidth;
             const h = target.offsetHeight;
             if (w > 0 && h > 0) {
-                // For non-resizable nodes, height is auto. Sync it.
                 if (!isResizable) mvHeight.set(h);
                 onDimensionsChangeRef.current(id, w, h);
             }
@@ -131,23 +129,21 @@ export const NodeShell: React.FC<NodeShellProps> = ({
       minHeight: '100px',
       borderRadius: theme.radius[4],
       background: theme.surface[2],
-      boxShadow: isSelected 
-        ? `0 0 0 1.5px ${theme.accent.primary}, ${theme.shadow}`
-        : theme.shadow,
-      border: `1px solid ${isSelected ? theme.accent.primary : theme.border}`,
       cursor: isDraggable ? 'grab' : (isPanMode ? 'grab' : 'default'),
       zIndex: isSelected ? 100 : 10,
-      transition: 'box-shadow 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.25s ease',
       display: 'flex',
       flexDirection: 'column' as const,
+      borderWidth: '1px',
+      borderStyle: 'solid',
+      // We will animate the actual colors and shadow via Framer Motion's animate prop
     },
     contentArea: {
       position: 'relative' as const,
       zIndex: 2,
       width: '100%',
-      flex: 1, // Allow content to grow
+      flex: 1, 
       display: 'flex',
-      minHeight: 0, // Flexbox fix for overflow
+      minHeight: 0, 
     },
     resizeHandle: {
       position: 'absolute' as const,
@@ -168,6 +164,20 @@ export const NodeShell: React.FC<NodeShellProps> = ({
     }
   };
 
+  // Pre-calculated selection states for smooth transitions
+  const selectionVariants = {
+    selected: {
+      borderColor: theme.accent.primary,
+      boxShadow: `0 0 0 1.5px ${theme.accent.primary}, 0 0 20px 4px ${theme.accent.glow}, ${theme.shadow}`,
+      scale: 1.015,
+    },
+    default: {
+      borderColor: theme.border,
+      boxShadow: theme.shadow,
+      scale: 1,
+    }
+  };
+
   return (
     <motion.div
       ref={containerRef}
@@ -182,15 +192,19 @@ export const NodeShell: React.FC<NodeShellProps> = ({
       dragMomentum={false}
       onDragEnd={handleDragEnd}
       onPointerDown={(e) => {
-        if (!isPanMode) {
+        // Only select if not panning and the click was specifically on the shell background
+        // and not intercepted by interactive children (buttons/inputs)
+        const isChildInteractive = (e.target as HTMLElement).closest('button, input, textarea');
+        if (!isPanMode && !e.defaultPrevented && !isChildInteractive) {
             e.stopPropagation(); 
             onSelect(id);
         }
       }}
-      initial={{ scale: 0.9, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      whileTap={isDraggable ? { cursor: 'grabbing', scale: 1.01 } : {}}
-      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+      initial="default"
+      animate={isSelected ? "selected" : "default"}
+      variants={selectionVariants}
+      whileTap={isDraggable ? { cursor: 'grabbing', scale: 1.025 } : {}}
+      transition={{ type: 'spring', stiffness: 450, damping: 30 }}
     >
       <div style={renderHandleGroup('top', handles.top || 0)}>
         {Array.from({ length: handles.top || 0 }).map((_, i) => (
@@ -267,7 +281,7 @@ export const NodeShell: React.FC<NodeShellProps> = ({
             onDragEnd={() => {
                 onResize?.({ width: mvWidth.get(), height: mvHeight.get() });
             }}
-            onPointerDown={(e) => e.stopPropagation()} // Prevent node selection
+            onPointerDown={(e) => e.stopPropagation()} 
         >
             <Icon.CornersOut size={12} weight="bold" />
         </motion.div>

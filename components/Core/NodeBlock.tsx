@@ -12,6 +12,8 @@ interface IPOSlateProps {
   data: Extract<NodeData, { type: 'input' | 'process' | 'output' }>;
   onUpdate?: (data: Partial<NodeData>) => void;
   onDelete?: () => void;
+  isMenuOpen?: boolean;
+  onToggleMenu?: () => void;
 }
 
 const getNodeIcon = (type: string, color: string) => {
@@ -24,10 +26,10 @@ const getNodeIcon = (type: string, color: string) => {
   }
 };
 
-export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
+export const IPOSlate = memo(({ data, onUpdate, onDelete, isMenuOpen, onToggleMenu }: IPOSlateProps) => {
   const { theme } = useTheme();
   const [isEditing, setIsEditing] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
+  const showMenu = isMenuOpen ?? false;
   const [isHovered, setIsHovered] = useState(false);
   const [editValues, setEditValues] = useState({ label: data.label, value: data.value });
   const inputRef = useRef<HTMLInputElement>(null);
@@ -55,6 +57,21 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
       });
     }
   };
+  
+  const handleToggleMenu = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    onToggleMenu?.();
+  };
+  
+  const handleMenuButton = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation(); // CRITICAL: Stop propagation to prevent node selection/drag
+    if(isEditing) {
+        handleSave();
+    } else {
+        onToggleMenu?.();
+    }
+  };
 
   const getNodeSpecificActions = () => {
     switch(data.type) {
@@ -72,11 +89,11 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
       width: '100%',
     },
     header: {
-      padding: '12px 14px 8px',
+      padding: '0 0 0 14px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      gap: '10px',
+      height: '44px',
     },
     titleGroup: {
       display: 'flex',
@@ -107,7 +124,7 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
       fontSize: '12px',
       fontFamily: '"Victor Mono", monospace',
       color: theme.content[2],
-      background: theme.surface[1], // Cutout effect
+      background: theme.surface[1], 
       padding: '8px 10px',
       borderRadius: theme.radius[2],
       border: '1px solid transparent',
@@ -147,17 +164,20 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
       border: 'none',
       cursor: 'pointer',
       color: theme.content[3],
-      padding: '4px',
-      borderRadius: '4px',
+      width: '44px',
+      height: '44px',
+      borderRadius: '50%',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      opacity: isHovered || showMenu ? 1 : 0, // Only show on hover for minimal noise
-      transition: 'opacity 0.2s, color 0.2s',
+      opacity: (isHovered || showMenu || isEditing) ? 1 : 0.8, 
+      transition: 'opacity 0.2s, color 0.2s, background 0.2s',
+      flexShrink: 0,
+      outline: 'none',
     },
     dropdown: {
       position: 'absolute' as const,
-      top: '36px',
+      top: '40px',
       right: '8px',
       background: theme.surface[2],
       border: `1px solid ${theme.border}`,
@@ -201,7 +221,7 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
       {showMenu && (
         <div 
           style={{ position: 'fixed', inset: 0, zIndex: 55 }} 
-          onClick={(e) => { e.stopPropagation(); setShowMenu(false); }} 
+          onPointerDown={handleToggleMenu} 
         />
       )}
 
@@ -215,6 +235,7 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
               value={editValues.label}
               onChange={(e) => setEditValues(prev => ({...prev, label: e.target.value}))}
               onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+              onPointerDown={(e) => { e.stopPropagation(); }} 
             />
           ) : (
             <span style={styles.headerText} title={data.label}>{data.label}</span>
@@ -223,9 +244,11 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
         
         <button 
           style={styles.iconBtn} 
-          onClick={(e) => { e.stopPropagation(); isEditing ? handleSave() : setShowMenu(!showMenu); }}
+          onPointerDown={handleMenuButton}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.surface[3]}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
         >
-          {isEditing ? <Icon.Check size={14} color={theme.accent.valid} weight="bold" /> : <Icon.DotsThree size={18} weight="bold" />}
+          {isEditing ? <Icon.Check size={18} color={theme.accent.valid} weight="bold" /> : <Icon.DotsThree size={22} weight="bold" />}
         </button>
 
         <AnimatePresence>
@@ -241,9 +264,9 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
                  <button 
                   key={idx}
                   style={styles.menuItem}
-                  onClick={(e) => {
+                  onPointerDown={(e) => {
                     e.stopPropagation();
-                    setShowMenu(false);
+                    onToggleMenu?.();
                   }}
                   onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.surface[3]}
                   onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -257,9 +280,9 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
 
               <button 
                 style={styles.menuItem}
-                onClick={(e) => {
+                onPointerDown={(e) => {
                   e.stopPropagation();
-                  setShowMenu(false);
+                  onToggleMenu?.();
                   setIsEditing(true);
                 }}
                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.surface[3]}
@@ -270,9 +293,9 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
               </button>
               <button 
                 style={{ ...styles.menuItem, color: theme.accent.danger }}
-                onClick={(e) => {
+                onPointerDown={(e) => {
                   e.stopPropagation();
-                  setShowMenu(false);
+                  onToggleMenu?.();
                   onDelete?.();
                 }}
                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.surface[3]}
@@ -292,9 +315,9 @@ export const IPOSlate = memo(({ data, onUpdate, onDelete }: IPOSlateProps) => {
                 ref={textareaRef}
                 style={styles.input}
                 value={editValues.value ?? ''}
+                onPointerDown={(e) => { e.stopPropagation(); }} 
                 onChange={(e) => {
                     setEditValues(prev => ({...prev, value: e.target.value}));
-                    // Auto-resize on change
                     const ta = e.currentTarget;
                     ta.style.height = 'auto';
                     ta.style.height = `${ta.scrollHeight}px`;

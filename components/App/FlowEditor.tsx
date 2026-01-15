@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Node, Edge, Viewport, NodeData, Position } from '../../types';
 import { IPOSlate } from '../Core/NodeBlock'; 
@@ -55,10 +56,47 @@ const graphSchema = {
   required: ['nodes', 'edges']
 };
 
+const initialNodes: Node[] = [
+  {
+    id: 'input-1',
+    position: { x: 100, y: 300 },
+    data: { label: 'User Input', type: 'input', value: 'Data Stream' },
+    handles: { top: 1, right: 1, bottom: 1, left: 1 },
+    width: 200,
+  },
+  {
+    id: 'proc-1',
+    position: { x: 400, y: 200 },
+    data: { label: 'Normalize', type: 'process' },
+    handles: { top: 1, right: 1, bottom: 1, left: 1 },
+    width: 200,
+  },
+   {
+    id: 'proc-2',
+    position: { x: 400, y: 400 },
+    data: { label: 'Sanitize', type: 'process' },
+    handles: { top: 1, right: 1, bottom: 1, left: 1 },
+    width: 200,
+  },
+   {
+    id: 'out-1',
+    position: { x: 750, y: 300 },
+    data: { label: 'Database', type: 'output' },
+    handles: { top: 1, right: 1, bottom: 1, left: 1 },
+    width: 200,
+  }
+];
+
+const initialEdges: Edge[] = [
+    { id: 'e1', source: 'input-1', sourceHandle: 0, sourceSide: 'right', target: 'proc-1', targetHandle: 0, targetSide: 'left' },
+    { id: 'e2', source: 'input-1', sourceHandle: 0, sourceSide: 'right', target: 'proc-2', targetHandle: 0, targetSide: 'left' },
+    { id: 'e3', source: 'proc-1', sourceHandle: 0, sourceSide: 'right', target: 'out-1', targetHandle: 0, targetSide: 'left' },
+    { id: 'e4', source: 'proc-2', sourceHandle: 0, sourceSide: 'right', target: 'out-1', targetHandle: 0, targetSide: 'left' }
+];
 
 export const FlowEditor: React.FC = () => {
-  const [nodes, setNodes] = useState<Node[]>([]);
-  const [edges, setEdges] = useState<Edge[]>([]);
+  const [nodes, setNodes] = useState<Node[]>(initialNodes);
+  const [edges, setEdges] = useState<Edge[]>(initialEdges);
   const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, zoom: 1 });
   const [activeTool, setActiveTool] = useState<'select' | 'connect' | 'pan'>('select');
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
@@ -70,47 +108,9 @@ export const FlowEditor: React.FC = () => {
   // Context Menu State
   const [contextMenuPos, setContextMenuPos] = useState<Position | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // Initial Data
-  useEffect(() => {
-    setNodes([
-      {
-        id: 'input-1',
-        position: { x: 100, y: 300 },
-        data: { label: 'User Input', type: 'input', value: 'Data Stream' },
-        handles: { top: 1, right: 1, bottom: 1, left: 1 },
-        width: 200,
-      },
-      {
-        id: 'proc-1',
-        position: { x: 400, y: 200 },
-        data: { label: 'Normalize', type: 'process' },
-        handles: { top: 1, right: 1, bottom: 1, left: 1 },
-        width: 200,
-      },
-       {
-        id: 'proc-2',
-        position: { x: 400, y: 400 },
-        data: { label: 'Sanitize', type: 'process' },
-        handles: { top: 1, right: 1, bottom: 1, left: 1 },
-        width: 200,
-      },
-       {
-        id: 'out-1',
-        position: { x: 750, y: 300 },
-        data: { label: 'Database', type: 'output' },
-        handles: { top: 1, right: 1, bottom: 1, left: 1 },
-        width: 200,
-      }
-    ]);
-    
-    setEdges([
-        { id: 'e1', source: 'input-1', sourceHandle: 0, sourceSide: 'right', target: 'proc-1', targetHandle: 0, targetSide: 'left' },
-        { id: 'e2', source: 'input-1', sourceHandle: 0, sourceSide: 'right', target: 'proc-2', targetHandle: 0, targetSide: 'left' },
-        { id: 'e3', source: 'proc-1', sourceHandle: 0, sourceSide: 'right', target: 'out-1', targetHandle: 0, targetSide: 'left' },
-        { id: 'e4', source: 'proc-2', sourceHandle: 0, sourceSide: 'right', target: 'out-1', targetHandle: 0, targetSide: 'left' }
-    ]);
-  }, []);
+  
+  // Node-specific menu state
+  const [openNodeMenu, setOpenNodeMenu] = useState<string | null>(null);
 
   const handleClearCanvas = () => {
     setNodes([]);
@@ -202,10 +202,10 @@ export const FlowEditor: React.FC = () => {
     navigator.clipboard.writeText(output);
   };
 
-  const handleGenerateGraph = async (prompt: string) => {
-    if (!prompt) return;
+  const handleGenerateGraph = async (prompt: string, apiKey: string) => {
+    if (!prompt || !apiKey) return;
 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+    const ai = new GoogleGenAI({ apiKey });
     
     const systemInstruction = `You are an expert system architect and visual designer. Your task is to generate a directed graph based on a user's description. The graph must be represented as a JSON object containing 'nodes' and 'edges'.
 
@@ -218,7 +218,7 @@ Follow these layout rules strictly:
 6.  **Schema Adherence & Data:** Each node must have a unique 'id', a 'label', a 'type' ('input', 'process', or 'output'), a 'position' {x, y}, and a 'value'. For the 'value', provide a meaningful and concise example string representing the data the node might handle (e.g., "User credentials" or "JWT Token Validation"). Each edge must connect two nodes using their 'id's in the 'source' and 'target' fields. Ensure all node IDs used in edges exist in the nodes array.`;
     
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         contents: `Generate a graph for: "${prompt}"`,
         config: {
             responseMimeType: 'application/json',
@@ -382,6 +382,8 @@ Follow these layout rules strictly:
         onViewportChange={setViewport}
         activeTool={activeTool}
         onNodeResize={handleNodeResize}
+        openNodeMenu={openNodeMenu}
+        onToggleNodeMenu={(nodeId) => setOpenNodeMenu(prev => prev === nodeId ? null : nodeId)}
         renderNode={(node) => {
             if (node.data.type === 'embed') {
                 return <EmbedSlate 

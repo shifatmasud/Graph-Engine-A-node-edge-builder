@@ -18,6 +18,8 @@ interface GraphEngineProps {
   readOnly?: boolean;
   activeTool?: 'select' | 'connect' | 'pan';
   onNodeResize?: (id: string, dimensions: { width: number, height: number }) => void;
+  openNodeMenu?: string | null;
+  onToggleNodeMenu?: (nodeId: string) => void;
 }
 
 // Helpers
@@ -45,9 +47,11 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
   readOnly = false,
   activeTool = 'select',
   onNodeResize,
+  openNodeMenu,
+  onToggleNodeMenu,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const nodeMotionValues = useRef(new Map<string, { x: MotionValue<number>; y: MotionValue<number> }>());
+  const nodeMotionValues = useRef(new Map<string, { x: MotionValue<number>; y: MotionValue<number>; lastSyncedX: number; lastSyncedY: number }>());
   const { theme } = useTheme();
 
   // MotionValues for high-performance transformations
@@ -80,8 +84,7 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     const nodeDepths = new Map<string, number>();
     nodes.forEach(n => nodeDepths.set(n.id, 0));
 
-    // Propagate depths (Bellman-Ford style relaxation to handle cycles gracefully)
-    // We limit iterations to nodes.length to avoid infinite loops in cycles
+    // Propagate depths
     for (let i = 0; i < nodes.length + 1; i++) {
         let changed = false;
         edges.forEach(e => {
@@ -98,7 +101,6 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     const computedEdgeDepths = new Map<string, number>();
     let max = 0;
     edges.forEach(e => {
-        // Edge depth corresponds to the source node's depth
         const depth = nodeDepths.get(e.source) || 0;
         computedEdgeDepths.set(e.id, depth);
         if (depth > max) max = depth;
@@ -107,7 +109,7 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     return { edgeDepths: computedEdgeDepths, maxDepth: max };
   }, [nodes, edges]);
 
-  // Sync MotionValues
+  // Sync Viewport MotionValues
   useEffect(() => {
     if (!isGestureActive.current) {
       viewX.set(viewport.x);
@@ -115,26 +117,6 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
       viewZoom.set(viewport.zoom);
     }
   }, [viewport, viewX, viewY, viewZoom]);
-
-  useEffect(() => {
-    nodes.forEach(node => {
-      let mvs = nodeMotionValues.current.get(node.id);
-      if (!mvs) {
-        mvs = { x: motionValue(node.position.x), y: motionValue(node.position.y) };
-        nodeMotionValues.current.set(node.id, mvs);
-      } else {
-        if (Math.abs(mvs.x.get() - node.position.x) > 0.1) mvs.x.set(node.position.x);
-        if (Math.abs(mvs.y.get() - node.position.y) > 0.1) mvs.y.set(node.position.y);
-      }
-    });
-    
-    const currentIds = new Set(nodes.map(n => n.id));
-    for (const [id] of nodeMotionValues.current) {
-      if (!currentIds.has(id)) {
-        nodeMotionValues.current.delete(id);
-      }
-    }
-  }, [nodes]);
 
   // Keyboard Handling
   useEffect(() => {
@@ -162,13 +144,10 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedNodeId, nodes, edges, onNodesChange, onEdgesChange, readOnly]);
 
-  // --- Unified Pointer Handling (Touch + Mouse) ---
-
   const handlePointerDown = (e: React.PointerEvent) => {
     (e.target as Element).setPointerCapture(e.pointerId);
     pointerCache.current.set(e.pointerId, e.nativeEvent);
     
-    // If a click-to-click connection is pending and we click the canvas, cancel it.
     if (pendingConnection && !isDraggingConnection.current && e.target === containerRef.current) {
         setPendingConnection(null);
     }
@@ -209,15 +188,13 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     setMouseCanvasPos(currentMouseCanvasPos);
 
     if (pendingConnection) {
-        // Check if we've moved enough to be considered a drag
         if (!isDraggingConnection.current && pointerDownPos.current) {
             const dist = Math.hypot(e.clientX - pointerDownPos.current.x, e.clientY - pointerDownPos.current.y);
-            if (dist > 5) { // Drag threshold
+            if (dist > 5) {
                 isDraggingConnection.current = true;
             }
         }
         
-        // Only do proximity check if we are actively dragging
         if (isDraggingConnection.current) {
             const HIT_RADIUS = 80;
             let closestHandle: { nodeId: string; index: number; side: Side; dist: number } | null = null;
@@ -248,7 +225,6 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
         }
     }
 
-    // Gesture Logic
     pointerCache.current.set(e.pointerId, e.nativeEvent);
     if (pointerCache.current.size === 2 && prevPinchInfo.current) {
       const points = Array.from(pointerCache.current.values());
@@ -276,7 +252,6 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    // DRAG-AND-DROP COMPLETION LOGIC
     if (pendingConnection && isDraggingConnection.current) {
         if (hoveredHandle) {
             const sourceNodeId = pendingConnection.sourceNodeId;
@@ -299,11 +274,9 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
         setPendingConnection(null);
     }
     
-    // Reset drag-related state
     isDraggingConnection.current = false;
     setHoveredHandle(null);
     
-    // Gesture & Canvas Logic
     if ((e.target as Element).hasPointerCapture?.(e.pointerId)) {
         (e.target as Element).releasePointerCapture(e.pointerId);
     }
@@ -373,9 +346,8 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     e.stopPropagation();
 
     if (pendingConnection) {
-        // --- SECOND CLICK LOGIC ---
         if (pendingConnection.sourceNodeId === nodeId) {
-            setPendingConnection(null); // Cancel on same node or handle
+            setPendingConnection(null);
             return;
         }
         
@@ -395,7 +367,6 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
         }
         setPendingConnection(null);
     } else {
-        // --- FIRST CLICK / START DRAG LOGIC ---
         isDraggingConnection.current = false;
         pointerDownPos.current = { x: e.clientX, y: e.clientY };
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -430,6 +401,13 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
     if (activeTool === 'connect') return 'crosshair';
     return 'default';
   };
+
+  const currentIds = new Set(nodes.map(n => n.id));
+  for (const id of nodeMotionValues.current.keys()) {
+    if (!currentIds.has(id)) {
+      nodeMotionValues.current.delete(id);
+    }
+  }
 
   const styles = {
     container: {
@@ -525,7 +503,6 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
             scale: viewZoom
           }}
         >
-          {/* Edge Layer */}
           <svg style={styles.svgLayer}>
             {edges.map(edge => {
                 const sourceNodeMVs = nodeMotionValues.current.get(edge.source);
@@ -567,12 +544,32 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
             )}
           </svg>
 
-          {/* Node Layer */}
           <div style={styles.nodeLayer}>
             <AnimatePresence>
               {nodes.map(node => {
-                 const mvs = nodeMotionValues.current.get(node.id);
-                 if (!mvs) return null;
+                 let mvs = nodeMotionValues.current.get(node.id);
+                 if (!mvs) {
+                   mvs = { 
+                     x: motionValue(node.position.x), 
+                     y: motionValue(node.position.y),
+                     lastSyncedX: node.position.x,
+                     lastSyncedY: node.position.y
+                   };
+                   nodeMotionValues.current.set(node.id, mvs);
+                 } else {
+                   // CRITICAL FIX: Only sync if state differs from the last value we pushed to MotionValue.
+                   // This prevents "snapping back" during drag while still allowing external position updates.
+                   if (node.position.x !== mvs.lastSyncedX) {
+                      mvs.x.set(node.position.x);
+                      mvs.lastSyncedX = node.position.x;
+                   }
+                   if (node.position.y !== mvs.lastSyncedY) {
+                      mvs.y.set(node.position.y);
+                      mvs.lastSyncedY = node.position.y;
+                   }
+                 }
+                 
+                 const nodeContent = renderNode(node);
 
                  return (
                   <NodeShell
@@ -593,6 +590,7 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
                     onSelect={(id) => {
                       if (activeTool === 'select') {
                         setSelectedNodeId(id);
+                        if (openNodeMenu) onToggleNodeMenu?.(openNodeMenu);
                       }
                     }}
                     onDimensionsChange={handleNodeAutoResize}
@@ -600,7 +598,13 @@ export const GraphEngine: React.FC<GraphEngineProps> = ({
                     onHandlePointerDown={handleHandlePointerDown}
                     onResize={(dims) => onNodeResize?.(node.id, dims)}
                   >
-                    {renderNode(node)}
+                    {React.isValidElement(nodeContent) 
+                        ? React.cloneElement(nodeContent, { 
+                            isMenuOpen: openNodeMenu === node.id,
+                            onToggleMenu: () => onToggleNodeMenu?.(node.id),
+                          }) 
+                        : nodeContent
+                    }
                   </NodeShell>
                  );
               })}

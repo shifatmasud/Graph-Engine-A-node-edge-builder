@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 // FIX: Switched to namespace import for @phosphor-icons/react to resolve module export errors.
@@ -8,7 +9,7 @@ import { ConfirmModal } from './ConfirmModal';
 interface GeneratorModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (prompt: string) => Promise<void>;
+  onSubmit: (prompt: string, apiKey: string) => Promise<void>;
   shouldConfirm?: boolean;
   onClear?: () => void;
 }
@@ -16,6 +17,7 @@ interface GeneratorModalProps {
 export const GeneratorModal: React.FC<GeneratorModalProps> = ({ isOpen, onClose, onSubmit, shouldConfirm = false, onClear }) => {
   const { theme } = useTheme();
   const [prompt, setPrompt] = useState('');
+  const [apiKey, setApiKey] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
@@ -26,16 +28,21 @@ export const GeneratorModal: React.FC<GeneratorModalProps> = ({ isOpen, onClose,
       setIsLoading(false);
       setError(null);
       setIsConfirming(false);
+      const storedApiKey = localStorage.getItem('nexus-flow-api-key');
+      if (storedApiKey) {
+        setApiKey(storedApiKey);
+      }
     }
   }, [isOpen]);
 
   const startGeneration = async () => {
-    onClear?.();
+    localStorage.setItem('nexus-flow-api-key', apiKey);
+    if (onClear) onClear();
     setIsLoading(true);
     setError(null);
     
     try {
-      await onSubmit(prompt);
+      await onSubmit(prompt, apiKey);
     } catch (err) {
         console.error(err);
         setError(`Generation failed. Please check your API key and try again.`);
@@ -47,6 +54,12 @@ export const GeneratorModal: React.FC<GeneratorModalProps> = ({ isOpen, onClose,
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim() || isLoading) return;
+
+    if (!apiKey.trim()) {
+      setError('API Key is required to generate a graph.');
+      return;
+    }
+    setError(null);
 
     if (shouldConfirm) {
       setIsConfirming(true);
@@ -118,6 +131,18 @@ export const GeneratorModal: React.FC<GeneratorModalProps> = ({ isOpen, onClose,
       color: theme.content[1],
       fontFamily: '"Inter", sans-serif',
       resize: 'vertical' as const,
+      outline: 'none',
+      transition: 'border-color 0.2s',
+    },
+    input: {
+      width: '100%',
+      background: theme.surface[1],
+      border: `1px solid ${theme.border}`,
+      borderRadius: theme.radius[3],
+      padding: theme.space[3],
+      fontSize: '14px',
+      color: theme.content[1],
+      fontFamily: '"Inter", sans-serif',
       outline: 'none',
       transition: 'border-color 0.2s',
     },
@@ -196,6 +221,17 @@ export const GeneratorModal: React.FC<GeneratorModalProps> = ({ isOpen, onClose,
                   onBlur={(e) => e.target.style.borderColor = theme.border}
                 />
                 
+                <input
+                  type="password"
+                  style={styles.input}
+                  placeholder="Enter your Google AI API Key"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  disabled={isLoading}
+                  onFocus={(e) => e.target.style.borderColor = theme.accent.primary}
+                  onBlur={(e) => e.target.style.borderColor = theme.border}
+                />
+
                 <AnimatePresence>
                   {error && (
                     <motion.div
