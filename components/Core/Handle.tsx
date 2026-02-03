@@ -53,7 +53,6 @@ export const Handle: React.FC<HandleProps> = ({
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      pointerEvents: 'auto' as const,
     },
     visual: {
       width: `${visualSize}px`,
