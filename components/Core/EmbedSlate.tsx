@@ -11,13 +11,15 @@ interface EmbedSlateProps {
   data: Extract<NodeData, { type: 'embed' }>;
   onUpdate: (updates: { data?: Partial<NodeData>, width?: number, height?: number }) => void;
   onDelete?: () => void;
+  isMenuOpen?: boolean;
+  onToggleMenu?: () => void;
 }
 
-export const EmbedSlate: React.FC<EmbedSlateProps> = ({ data, onUpdate, onDelete }) => {
+export const EmbedSlate: React.FC<EmbedSlateProps> = ({ data, onUpdate, onDelete, isMenuOpen, onToggleMenu }) => {
   const { theme } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isHovered, setIsHovered] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
+  const showMenu = isMenuOpen ?? false;
   const [isUrlModalOpen, setIsUrlModalOpen] = useState(false);
   const isWebsite = data.embedData?.mimeType === 'text/html';
 
@@ -241,7 +243,7 @@ export const EmbedSlate: React.FC<EmbedSlateProps> = ({ data, onUpdate, onDelete
       {showMenu && (
         <div 
           style={{ position: 'fixed', inset: 0, zIndex: 55 }} 
-          onPointerDown={(e) => { e.stopPropagation(); setShowMenu(false); }} 
+          onPointerDown={(e) => { e.stopPropagation(); onToggleMenu?.(); }} 
         />
       )}
       <input
@@ -261,7 +263,7 @@ export const EmbedSlate: React.FC<EmbedSlateProps> = ({ data, onUpdate, onDelete
         </div>
         <button 
           style={styles.menuButton} 
-          onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setShowMenu(!showMenu); }}
+          onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); onToggleMenu?.(); }}
           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.surface[3]}
           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
         >
@@ -280,7 +282,7 @@ export const EmbedSlate: React.FC<EmbedSlateProps> = ({ data, onUpdate, onDelete
                   style={styles.menuItem}
                   onPointerDown={(e) => {
                     e.stopPropagation();
-                    setShowMenu(false);
+                    onToggleMenu?.();
                     setIsUrlModalOpen(true);
                   }}
                   onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.surface[3]}
@@ -297,7 +299,7 @@ export const EmbedSlate: React.FC<EmbedSlateProps> = ({ data, onUpdate, onDelete
                       style={styles.menuItem}
                       onPointerDown={(e) => {
                         e.stopPropagation();
-                        setShowMenu(false);
+                        onToggleMenu?.();
                         onUpdate({ data: { embedData: undefined, label: 'Embed Node' } });
                       }}
                       onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.surface[3]}
@@ -315,7 +317,7 @@ export const EmbedSlate: React.FC<EmbedSlateProps> = ({ data, onUpdate, onDelete
                   style={{ ...styles.menuItem, color: theme.accent.danger }}
                   onPointerDown={(e) => {
                       e.stopPropagation();
-                      setShowMenu(false);
+                      onToggleMenu?.();
                       onDelete?.();
                   }}
                   onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.surface[3]}

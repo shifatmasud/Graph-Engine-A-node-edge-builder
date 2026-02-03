@@ -325,12 +325,13 @@ Follow these layout rules strictly:
       backgroundColor: theme.surface[1],
       color: theme.content[1],
       transition: 'background-color 0.3s ease, color 0.3s ease',
-      WebkitTouchCallout: 'none', // Disable context menu on long press for iOS Safari
-      WebkitUserSelect: 'none', // Disable text selection for iOS Safari
-      KhtmlUserSelect: 'none', // Disable text selection for Konqueror
-      MozUserSelect: 'none', // Disable text selection for Firefox
-      MsUserSelect: 'none', // Disable text selection for Edge/IE
-      userSelect: 'none', // Disable text selection for general browsers
+      // FIX: Added 'as const' to satisfy the CSSProperties type for userSelect.
+      WebkitTouchCallout: 'none' as const, // Disable context menu on long press for iOS Safari
+      WebkitUserSelect: 'none' as const, // Disable text selection for iOS Safari
+      KhtmlUserSelect: 'none' as const, // Disable text selection for Konqueror
+      MozUserSelect: 'none' as const, // Disable text selection for Firefox
+      MsUserSelect: 'none' as const, // Disable text selection for Edge/IE
+      userSelect: 'none' as const, // Disable text selection for general browsers
     },
     uiOverlay: {
       position: 'absolute' as const,

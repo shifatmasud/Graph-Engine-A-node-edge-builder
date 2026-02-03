@@ -269,6 +269,7 @@ export const NodeShell: React.FC<NodeShellProps> = ({
             drag
             dragMomentum={false}
             dragElastic={0}
+            dragConstraints={{ left: 0, top: 0, right: 0, bottom: 0 }}
             onDragStart={() => {
                 initialSizeRef.current = { width: mvWidth.get(), height: mvHeight.get() };
             }}
